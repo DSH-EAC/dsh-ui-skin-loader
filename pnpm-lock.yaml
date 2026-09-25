@@ -44,6 +44,8 @@ importers:
 
   packages/skins/inkwash: {}
 
+  packages/skins/trading: {}
+
 packages:
 
   '@cacheable/memory@2.2.0':

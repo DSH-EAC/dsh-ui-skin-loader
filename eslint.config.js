@@ -5,6 +5,13 @@ export default tseslint.config(
   {
     ignores: ["**/node_modules/", "**/dist/", "**/.verify/", "**/.superpowers/"],
   },
+  {
+    // Task 10（皮肤迁移）：vendored 上游皮肤产物是逐字节迁移的第三方构件
+    // （ BSD-3-Clause，来源与改动记录在包内 THIRD-PARTY-NOTICES.md 与文件头），
+    // 不是本仓作者代码——不作为 lint 对象；其内容不变量由各皮肤包的
+    // src/index.test.ts 静态锁定。
+    ignores: ["packages/skins/*/src/vendor/**"],
+  },
   eslintJs.configs.recommended,
   ...tseslint.configs.recommended,
   {
