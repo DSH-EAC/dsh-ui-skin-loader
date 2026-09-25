@@ -1,0 +1,15 @@
+# Bundle patch layer of @dsh-eac/skin-dragon-heir (api-notes §1.2 form).
+#
+# Row id is only the entry id: dragon-heir ships NO Config schema and NO
+# settings UI (covenant §4.2 — a skin may offer no custom settings and must
+# not be treated differently; same shape as the inkwash precedent).
+#   row id               : dsh-eac-skin-dragon-heir
+#   skin id (covenant §3): dsh-eac.skin.dragon-heir
+#   package name         : @dsh-eac/skin-dragon-heir
+# Upstream (dsh-web-ui) used the row id ui-skin-dragon-heir with the same
+# always-wired semantics; under the covenant the row is only an entry id —
+# activation is decided exclusively by the loader.
+- insert:
+    - id: dsh-eac-skin-dragon-heir
+      name: "@dsh-eac/skin-dragon-heir"
+      # disabled: true

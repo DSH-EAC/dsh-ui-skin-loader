@@ -42,6 +42,8 @@ importers:
         specifier: ~3.18.4
         version: 3.18.4
 
+  packages/skins/dragon-heir: {}
+
   packages/skins/inkwash: {}
 
   packages/skins/trading: {}
