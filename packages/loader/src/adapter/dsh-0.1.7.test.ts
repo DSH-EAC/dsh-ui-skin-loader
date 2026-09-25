@@ -184,21 +184,28 @@ function createFakeForm() {
   const listeners = new Set<() => void>();
   const sets: Array<{ field: string; value: unknown }> = [];
   let listenerDisposeCalls = 0;
+  // api-notes §8.2：上游快照是「稳定引用」——同一份快照对象保持到下次变更才更换。
+  const buildSnapshot = () => ({
+    status: "ready" as const,
+    value,
+    base: {} as Record<string, unknown>,
+    user: {} as Record<string, unknown>,
+    revision,
+    writable: true,
+    mode: "host",
+  });
+  let snapshot: SettingsSnapshot & {
+    base: Record<string, unknown>;
+    user: Record<string, unknown>;
+    mode: string;
+  } = buildSnapshot();
   const form = {
     getSnapshot(): SettingsSnapshot & {
       base: Record<string, unknown>;
       user: Record<string, unknown>;
       mode: string;
     } {
-      return {
-        status: "ready",
-        value,
-        base: {},
-        user: {},
-        revision,
-        writable: true,
-        mode: "host",
-      };
+      return snapshot;
     },
     subscribe(listener: () => void): Disposer {
       listeners.add(listener);
@@ -216,6 +223,7 @@ function createFakeForm() {
       sets.push({ field, value: next });
       value = { ...value, [field]: next };
       revision++;
+      snapshot = buildSnapshot();
       for (const listener of [...listeners]) {
         listener();
       }
@@ -576,6 +584,36 @@ test("settings.get projects the snapshot down to status/value/revision/writable"
     revision: 7,
     writable: true,
   } satisfies SettingsSnapshot);
+});
+
+test("settings projection memoizes by upstream snapshot identity (uSES-safe)", async () => {
+  const { ctx } = createFakeContext();
+  const adapter = createDsh017Adapter(ctx);
+  const form = adapter.settings.get("dsh-ui-skin-loader");
+  const first = form.get();
+  // 同一上游快照标识 → 同一投影引用（api-notes §8.2：getSnapshot 稳定引用，uSES 友好）。
+  assert.equal(form.get(), first);
+  // 新快照标识（上游变更）→ 新投影对象，字段随之更新。
+  await form.set("enabled", true);
+  const second = form.get();
+  assert.notEqual(second, first);
+  assert.equal(second.revision, 8);
+  assert.deepEqual(second.value, { enabled: true });
+  // 旧投影保持不可变（上游快照不可变语义）。
+  assert.equal(first.revision, 7);
+  assert.deepEqual(first.value, { enabled: false });
+  // 再次读取仍是 second（新标识同样 memoize）。
+  assert.equal(form.get(), second);
+});
+
+test("settings forms memoize independently per entryId", () => {
+  const { ctx } = createFakeContext();
+  const adapter = createDsh017Adapter(ctx);
+  const a = adapter.settings.get("ns-a");
+  const b = adapter.settings.get("ns-b");
+  assert.equal(a.get(), a.get());
+  assert.equal(b.get(), b.get());
+  assert.notEqual(a.get(), b.get());
 });
 
 test("settings form subscribe receives updates until disposed", async () => {

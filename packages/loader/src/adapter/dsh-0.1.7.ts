@@ -267,15 +267,29 @@ function createSettingsAdapter(upstream: UpstreamConfigForms): DshSettings {
     get<T = Record<string, unknown>>(entryId: string): DshSettingsForm<T> {
       // api-notes §8.1/§8.2：entryId == patch 行 id == settings 命名空间。
       const form = upstream.get(entryId);
+      // api-notes §8.2：上游 getSnapshot() 是「稳定引用，uSES 友好」——投影按上游快照标识
+      // memoize（WeakMap 随快照对象回收），同一快照标识返回同一投影对象，否则 T2.5 在
+      // useSyncExternalStore(form.subscribe, form.get) 下会触发 React
+      // "getSnapshot should be cached" 无限重渲染循环。
+      const projectionCache = new WeakMap<object, SettingsSnapshot<T>>();
       return {
         get(): SettingsSnapshot<T> {
           const snapshot = form.getSnapshot();
-          return {
+          const cached = projectionCache.get(snapshot);
+          if (cached) {
+            return cached;
+          }
+          const projected: SettingsSnapshot<T> = {
             status: snapshot.status,
             value: snapshot.value as T,
             revision: snapshot.revision,
             writable: snapshot.writable,
           };
+          // 快照契约是对象（§8.2）；防御性跳过非对象键，避免 WeakMap.set 抛错。
+          if (typeof snapshot === "object" && snapshot !== null) {
+            projectionCache.set(snapshot, projected);
+          }
+          return projected;
         },
         set(field: string, value: unknown): Promise<boolean> {
           return form.set(field, value);

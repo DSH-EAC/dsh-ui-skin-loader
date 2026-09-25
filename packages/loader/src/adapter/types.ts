@@ -148,7 +148,11 @@ export interface SettingsSnapshot<T = unknown> {
 
 /** api-notes §8.2：一个 settings 命名空间的 client 投影（写队列 + revision 栅栏由上游维护）。 */
 export interface DshSettingsForm<T = Record<string, unknown>> {
-  /** api-notes §8.2：当前快照（稳定引用，uSES 友好）。 */
+  /**
+   * api-notes §8.2：当前快照（稳定引用，uSES 友好）。投影按上游快照标识 memoize：
+   * 同一上游快照标识返回同一投影对象，可安全用作 useSyncExternalStore 的 getSnapshot；
+   * 上游快照更换（新标识）时返回新投影。
+   */
   get(): SettingsSnapshot<T>;
   /** api-notes §8.2：排队写一个字段，返回 Host 是否接受（被拒时上游回读恢复）。 */
   set(field: string, value: unknown): Promise<boolean>;
