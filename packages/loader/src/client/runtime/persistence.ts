@@ -108,6 +108,19 @@ export class SettingsStore {
     return this.readCurrent();
   }
 
+  /**
+   * 订阅本命名空间快照变更（跨标签页收敛的第二通道）。
+   *
+   * 实机验证（T2.7 V7）发现：上游对 `settings/document-updated` 的消费是
+   * `mirror.load()`（dsh-client-ui-settings/lib/client.js L1512）——**异步回源**。
+   * 事件到达时本端快照还是旧值，只靠事件驱动的 syncCheck 会读旧值幂等跳过、永不重放。
+   * 快照回源时上游会通知 form 订阅者（快照标识更换），把它作为 syncCheck 的第二触发源
+   * 即可在「无第二个事件」的情况下收敛；自身写入的回声与在途切换由 syncCheck 既有语义幂等消化。
+   */
+  onChange(listener: () => void): () => void {
+    return this.form.subscribe(listener);
+  }
+
   /** 写 activeSkin；被拒/超时/抛错返回 false（调用方负责如实上报，不重试——上游已带恢复读）。 */
   async writeActiveSkin(id: string): Promise<boolean> {
     try {

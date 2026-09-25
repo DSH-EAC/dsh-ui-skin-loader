@@ -189,6 +189,7 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
   let recoveryStarted = false;
   let userInteracted = false;
   let syncOff: Disposer | null = null;
+  let syncFormOff: Disposer | null = null;
   let pendingSyncCheck = false;
   let syncCheckScheduled = false;
   let grace: GraceWindow | null = null;
@@ -844,6 +845,8 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
       }
       syncOff?.();
       syncOff = null;
+      syncFormOff?.();
+      syncFormOff = null;
       pendingSyncCheck = false;
       if (inFlight) {
         await inFlight.settled; // 在途 run 观察 disposed 后有界落定
@@ -916,6 +919,11 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
       syncOff = adapter.remote.$on(DOCUMENT_UPDATED_EVENT, (...args: unknown[]) =>
         onRemoteDocumentUpdated(args),
       );
+      // 第二触发源（T2.7 V7 实机缺陷修复）：上游对 document-updated 的消费是异步的
+      // mirror.load()，事件当下本端快照可能还是旧值（读旧 → 幂等跳过 → 永不重放）。
+      // 快照回源时订阅者被通知，把它也接到 syncCheck 上；自身写入回声与在途切换
+      // 由 syncCheck 既有语义幂等消化（inFlight 早退 + 落定后 finally 重查）。
+      syncFormOff = store.onChange(() => scheduleSyncCheck());
       void recover();
       return () => stop();
     },

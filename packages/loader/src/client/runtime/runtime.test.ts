@@ -81,6 +81,7 @@ function createFakeSettings(initial: Partial<LoaderSettingsValue> = {}) {
   };
   const listeners = new Set<() => void>();
   const writes: Array<{ field: string; value: unknown }> = [];
+  const pendingRemote = new Map<string, unknown>();
   let failNextWrite = false;
   const form: DshSettingsForm<LoaderSettingsValue> = {
     get: () => snapshot,
@@ -132,6 +133,28 @@ function createFakeSettings(initial: Partial<LoaderSettingsValue> = {}) {
         value: { ...snapshot.value, [field]: structuredClone(value) },
         revision: snapshot.revision + 1,
       };
+      for (const listener of [...listeners]) {
+        listener();
+      }
+    },
+    /**
+     * 模拟「document-updated 事件已到达、但本端 mirror 尚未回源」：远端文档已变，
+     * 本端快照对象仍是旧值（实机上 mirror.load() 是事件之后的异步回源）。
+     */
+    setRemoteValueSilent(field: string, value: unknown) {
+      pendingRemote.set(field, structuredClone(value));
+    },
+    /** 模拟 mirror.load() 完成：远端文档回源到本端快照并通知订阅者（不伴随新事件）。 */
+    flushMirrorReload() {
+      if (pendingRemote.size === 0) {
+        return;
+      }
+      snapshot = {
+        ...snapshot,
+        value: { ...snapshot.value, ...Object.fromEntries(pendingRemote) },
+        revision: snapshot.revision + 1,
+      };
+      pendingRemote.clear();
       for (const listener of [...listeners]) {
         listener();
       }
@@ -776,16 +799,35 @@ test("cross-tab: identical persisted value is an idempotent no-op (self echo)", 
   assert.equal(h.service.current(), "alpha");
 });
 
-test("cross-tab: events for other namespaces are ignored", async () => {
+test("cross-tab: foreign-namespace events alone do not replay", async () => {
   const h = createHarness();
   const a = makeSkin("alpha");
   h.service.registerSkin(a);
-  h.settings.setRemoteValue("activeSkin", "alpha");
 
+  // 只有他人命名空间的事件广播、本命名空间快照没有任何变化 → 无事可做
   h.remote.emitRemote("settings/document-updated", "some-other-namespace", 9);
   await h.clock.pump();
   assert.equal(h.service.current(), DEFAULT_SKIN_ID);
   assert.deepEqual(a.calls, []);
+});
+
+test("cross-tab: our namespace snapshot refresh converges even when announced by a foreign-namespace event", async () => {
+  // 实机语义（dsh-client-ui-settings L1512）：mirror.load() 在**任何** document-updated
+  // 事件上都全量回源——他人命名空间的事件也可能让本命名空间的快照刷新（例如上一条
+  // 事件丢失时）。快照变化本身（第二触发源）必须驱动收敛。
+  const h = createHarness();
+  const a = makeSkin("alpha");
+  h.service.registerSkin(a);
+
+  h.settings.setRemoteValueSilent("activeSkin", "alpha");
+  h.remote.emitRemote("settings/document-updated", "some-other-namespace", 9);
+  await h.clock.pump();
+  assert.equal(h.service.current(), DEFAULT_SKIN_ID); // 事件当下快照未回源
+
+  h.settings.flushMirrorReload();
+  await h.clock.pump();
+  assert.equal(h.service.current(), "alpha"); // 回源后收敛
+  assert.deepEqual(a.calls, ["activate"]);
 });
 
 test("cross-tab: replay deferred while a local switch is in flight", async () => {
@@ -807,6 +849,26 @@ test("cross-tab: replay deferred while a local switch is in flight", async () =>
   await h.clock.pump();
   assert.equal(h.service.current(), "alpha");
   assert.deepEqual(a.calls, ["activate"]); // 落定后 syncCheck 发现一致 → 幂等
+});
+
+test("cross-tab: late mirror reload (no second event) still converges — real-machine race", async () => {
+  // 实机缺陷复现：document-updated 到达时本端 mirror 还是旧值（上游 mirror.load()
+  // 是事件后的异步回源），syncCheck 读旧快照幂等跳过 → 永不重放。
+  // 回归锁定：快照回源（form change，无新事件）必须再次调度 syncCheck。
+  const h = createHarness();
+  const a = makeSkin("alpha");
+  h.service.registerSkin(a);
+
+  // 1) 远端写入已发生，但本端 mirror 未回源；2) 事件到达（读到旧值 → 跳过）；3) mirror 回源
+  h.settings.setRemoteValueSilent("activeSkin", "alpha");
+  h.remote.emitRemote("settings/document-updated", SETTINGS_NAMESPACE, 2);
+  await h.clock.pump();
+  assert.equal(h.service.current(), DEFAULT_SKIN_ID); // 事件当下读到旧值：尚未跟随
+
+  h.settings.flushMirrorReload();
+  await h.clock.pump();
+  assert.equal(h.service.current(), "alpha"); // 回源后收敛
+  assert.deepEqual(a.calls, ["activate"]);
 });
 
 // ------------------------------------------------------------------ 登记协议
