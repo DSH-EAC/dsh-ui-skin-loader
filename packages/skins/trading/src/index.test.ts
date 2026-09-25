@@ -71,7 +71,7 @@ test("vendored module has no module-scope DOM side effects (S3: nothing runs bef
     "the style injection must live inside apply(), not at module scope",
   );
   assert.ok(
-    /function apply\(ctx\) \{\n\t\t\tconst tagId = /.test(vendoredSource),
+    /function apply\(ctx\) \{\r?\n\t\t\tconst tagId = /.test(vendoredSource),
     "the relocated injection block is the first statement of apply()",
   );
 });
