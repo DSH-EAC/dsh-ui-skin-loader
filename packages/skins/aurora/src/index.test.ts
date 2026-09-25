@@ -35,10 +35,23 @@ test("aurora theme registers a dark palette with alias tokens only", () => {
   const keys = Object.keys(AURORA_THEME.tokens);
   assert.ok(keys.length > 0, "tokens must not be empty");
   for (const key of keys) {
-    assert.ok(key.startsWith("--dsw-"), `token key must be a documented alias variable: ${key}`);
+    assert.ok(key.startsWith("--dsw-"), `token key must be a documented host theme variable: ${key}`);
   }
   // 玻璃拟态的关键：表面 token 是半透明的
   assert.match(AURORA_THEME.tokens["--dsw-alias-bg-base"]!, /rgba\(/);
+});
+
+test("navigation pill surface tokens are covered (T2.6-fix contrast regression lock)", () => {
+  // 实机定位：设置面板/侧栏导航项的选中/悬停态用 specific 层 nav-item token，
+  // 基础色板里是近白实体色——漏覆盖 = 浅色 pill 上亮色文字不可见（修复前截图 14）。
+  for (const key of [
+    "--dsw-specific-sidebar-nav-item-active",
+    "--dsw-specific-sidebar-nav-item-hover",
+    "--dsw-specific-sidebar-nav-item-active-accent",
+  ]) {
+    assert.ok(key in AURORA_THEME.tokens, `missing nav pill token: ${key}`);
+    assert.match(AURORA_THEME.tokens[key]!, /^rgba\(111, 155, 255|rgba\(148, 176, 255|rgba\(79, 141, 255/);
+  }
 });
 
 // ---------------------------------------------------------------------------

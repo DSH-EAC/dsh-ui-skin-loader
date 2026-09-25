@@ -1,10 +1,16 @@
 /**
- * 控制台样式（T2.5）。
+ * 控制台样式（T2.5；T2.6-fix 核心观感变量升级为「宿主 token 优先 + 原值 fallback」）。
  *
  * 亮暗自适应形态（brief §1 的两选一，报告已说明）：**自带 CSS 变量双套**，不依赖宿主
- * token，也不读上游私有 DOM/类名（R5 红线）。控制台根元素持 `data-usl-scheme` 属性，
- * 值来自主题快照（adapter getTheme/theme/change）——宿主切亮暗时根元素属性随之切换，
- * 变量整体换套。类名前缀 `usl-`（ui-skin-loader）为自留命名空间，不与上游冲突。
+ * 私有 DOM/类名（R5 红线）。控制台根元素持 `data-usl-scheme` 属性，值来自主题快照
+ * （adapter getTheme/theme/change）——宿主切亮暗时根元素属性随之切换，语义色
+ * （accent-soft/ok/warn/error/shadow）整体换套。
+ *
+ * T2.6-fix：核心观感变量（bg/surface/fg/muted/border/accent）改为
+ * `var(--dsw-alias-*, 原值)`——宿主主题 API 的别名层是公开 ABI，皮肤（公约参考实现
+ * aurora/inkwash）覆盖这些 token 时控制台自动跟随其色板，避免"面板已暗、控制台
+ * 文字仍是自带浅色值"的对比度反转；无皮肤覆盖时 fallback 生效，原生观感不变。
+ * 类名前缀 `usl-`（ui-skin-loader）为自留命名空间，不与上游冲突。
  *
  * 注入：材料化时往 document.head 插一条 <style>（幂等，data 标记守卫），
  * disposer 移除。这是标准 Web API（controller R11：不算上游耦合）。
@@ -16,10 +22,19 @@ export const CONSOLE_CSS = String.raw`
   --usl-bg: #ffffff;
   --usl-surface: #f6f7f9;
   --usl-surface-hover: #eceef2;
-  --usl-fg: #1c1f26;
-  --usl-fg-muted: #5c6270;
-  --usl-border: #dfe2e8;
-  --usl-accent: #3f6ae0;
+  /* 核心观感变量优先消费宿主主题 ABI 的别名 token（T2.6-fix）：皮肤经 theme API 覆盖
+     这些 token 时控制台自动跟随其色板（否则深色玻璃皮肤下会出现"面板已暗、控制台
+     文字仍用自带浅色值"的对比度反转）；fallback 保持本套原始值 = 无皮肤覆盖时的
+     原生观感逐字节不变。token 名为宿主公开面（theme.register/别名层，api-notes §7，
+     实机 BUILTIN_INSPECT_TOKENS 核对）。语义色（accent-soft/ok/warn/error/shadow）
+     是自带双套值，不随皮肤 token 走。 */
+  --usl-bg: var(--dsw-alias-bg-base, #ffffff);
+  --usl-surface: var(--dsw-alias-bg-layer-1, #f6f7f9);
+  --usl-surface-hover: var(--dsw-alias-bg-layer-2, #eceef2);
+  --usl-fg: var(--dsw-alias-label-primary, #1c1f26);
+  --usl-fg-muted: var(--dsw-alias-label-secondary, #5c6270);
+  --usl-border: var(--dsw-alias-border-l2, #dfe2e8);
+  --usl-accent: var(--dsw-alias-brand-primary, #3f6ae0);
   --usl-accent-soft: rgba(63, 106, 224, 0.12);
   --usl-accent-fg: #ffffff;
   --usl-ok: #1f8a4c;
@@ -36,13 +51,15 @@ export const CONSOLE_CSS = String.raw`
   line-height: 1.5;
 }
 .usl-console[data-usl-scheme="dark"] {
-  --usl-bg: #191b20;
-  --usl-surface: #22252c;
-  --usl-surface-hover: #2b2f38;
-  --usl-fg: #e8eaef;
-  --usl-fg-muted: #9aa0ad;
-  --usl-border: #363b45;
-  --usl-accent: #6d92ec;
+  /* 同上：核心观感变量跟随宿主 token（皮肤覆盖时 dark/light 两套解析到同一份
+     皮肤色板——宿主 token 本身已按当前配色解析）；fallback 为本套 dark 原值。 */
+  --usl-bg: var(--dsw-alias-bg-base, #191b20);
+  --usl-surface: var(--dsw-alias-bg-layer-1, #22252c);
+  --usl-surface-hover: var(--dsw-alias-bg-layer-2, #2b2f38);
+  --usl-fg: var(--dsw-alias-label-primary, #e8eaef);
+  --usl-fg-muted: var(--dsw-alias-label-secondary, #9aa0ad);
+  --usl-border: var(--dsw-alias-border-l2, #363b45);
+  --usl-accent: var(--dsw-alias-brand-primary, #6d92ec);
   --usl-accent-soft: rgba(109, 146, 236, 0.18);
   --usl-accent-fg: #0e1116;
   --usl-ok: #58c586;

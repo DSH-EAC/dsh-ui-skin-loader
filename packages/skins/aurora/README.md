@@ -77,11 +77,19 @@ configForms 机制把 `backgroundUrl` 持久化在**自己的**设置命名空�
 
 | 手段 | 通道 | 说明 |
 | --- | --- | --- |
-| 深色配色 | `ctx.theme.register`（colorScheme "dark" + `--dsw-alias-*` token） | 主题 API 是宿主公开面；deactivate 恢复用户原偏好 |
-| 玻璃拟态 | 主题 token 把宿主表面覆盖成半透明 | 透出 body 背景的光 |
+| 深色配色 | `ctx.theme.register`（colorScheme "dark" + token 覆盖） | 主题 API 是宿主公开面；deactivate dispose，用户偏好轴不被写（见 theme.ts 头注） |
+| 玻璃拟态 | token 覆盖层把宿主表面改半透明 | 透出 body 背景的光 |
 | 极光背景 | 皮肤自有 style 节点绘 `body` 背景 | 默认内置渐变；设置里可换自定义图片 URL（暗色遮罩保可读性） |
 | 氛围层 | `shell.overlay` 公开槽位（list，additive） | 自有席位 id `skn-aurora-backdrop`；pointer-events:none |
 | 设置分区 | `settings.section` 公开槽位 | 只在激活后注册（R1：未激活不注册壳级槽位内容） |
+
+**token 覆盖表纪律（T2.6-fix 教训，抄表前必读）**：覆盖表必须**表面与前景成对覆盖**——
+只覆盖文字色、不覆盖其所在表面（或反之），就会在改色后的表面上出现对比度反转。
+典型症状：**激活态下某处文字突然看不清、选中/悬停的 pill 变成"实心浅底 + 亮字"**
+（宿主导航选中态用 `--dsw-specific-sidebar-nav-item-active/-hover`，基础色板里是近白
+实体色，深色皮肤必须一并覆盖——本包 token 表末三行就是这一课的产物）。定位方法：
+实机打开出问题的界面，用 DevTools 查该元素的 `color`/`background` 各来自哪个
+`var(--dsw-…)`，把缺的那对补进覆盖表，再取色验证对比度。
 
 不碰的东西（公约 §5）：加载器控制台/保留 service/保留 settings 命名空间/保留槽位
 前缀（R2）；其它皮肤的 DOM 与样式（R3）；宿主恢复面（R4）；宿主私有 DOM、
