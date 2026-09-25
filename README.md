@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/DSH-EAC/dsh-ui-skin-loader/actions/workflows/ci.yml/badge.svg)](https://github.com/DSH-EAC/dsh-ui-skin-loader/actions/workflows/ci.yml)
 
-> **开发中** —— 加载器核心运行时（登记 / 互斥切换 / 持久化 / 恢复）已实现；控制台 GUI 与内置皮肤皮肤包在后续任务中。
+> **开发中** —— 加载器核心运行时（登记 / 互斥切换 / 持久化 / 恢复）、控制台 GUI 与两款内置皮肤（参考实现）均已实现。
 
 DSH UI 皮肤加载器：弱约束公约 [`dsh.ecosystem.ui-skin-loader/v1`](https://github.com/DSH-EAC/dsh-ui-skin-loader-convention) 的参考实现加载器，并附带内置皮肤。
 
@@ -10,10 +10,10 @@ DSH UI 皮肤加载器：弱约束公约 [`dsh.ecosystem.ui-skin-loader/v1`](htt
 
 ```text
 packages/
-  loader/           @dsh-eac/ui-skin-loader   加载器（骨架占位）
+  loader/           @dsh-eac/ui-skin-loader   加载器（运行时 + 控制台）
   skins/
-    aurora/         @dsh-eac/skin-aurora      内置皮肤（骨架占位）
-    inkwash/        @dsh-eac/skin-inkwash     内置皮肤（骨架占位）
+    aurora/         @dsh-eac/skin-aurora      内置皮肤「极光之夜」（深色玻璃拟态，带自定义设置）
+    inkwash/        @dsh-eac/skin-inkwash     内置皮肤「水墨青烟」（浅色纸质感，无设置）
 ```
 
 ## 开发
@@ -24,7 +24,7 @@ packages/
 pnpm install        # 安装依赖并生成 lockfile
 pnpm lint           # ESLint（typescript-eslint flat config，递归全部包）
 pnpm test           # node --test 直接运行各包 .test.ts（递归全部包）
-pnpm build          # 当前为 tsc --noEmit 占位，待有打包需求再演进
+pnpm build          # tsc --noEmit + esbuild-wasm 产出可安装产物（lib/，gitignored）
 pnpm typecheck      # tsc --noEmit 类型检查（递归全部包）
 ```
 

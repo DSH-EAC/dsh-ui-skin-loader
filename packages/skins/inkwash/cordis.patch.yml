@@ -1,0 +1,13 @@
+# Bundle patch layer of @dsh-eac/skin-inkwash (api-notes §1.2 form).
+#
+# Row id is only the entry id here: inkwash deliberately ships NO Config schema
+# and NO settings UI (covenant §4.2 — a skin may offer no custom settings and
+# must not be treated differently). Contrast with the aurora package, whose row
+# id doubles as its settings namespace.
+#   row id               : dsh-eac-skin-inkwash
+#   skin id (covenant §3): dsh-eac.skin.inkwash
+#   package name         : @dsh-eac/skin-inkwash
+- insert:
+    - id: dsh-eac-skin-inkwash
+      name: "@dsh-eac/skin-inkwash"
+      # disabled: true

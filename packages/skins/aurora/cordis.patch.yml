@@ -1,0 +1,16 @@
+# Bundle patch layer of @dsh-eac/skin-aurora (api-notes §1.2 form).
+#
+# Row id doubles as the skin's settings namespace (api-notes §8.1: entry id ==
+# settings namespace == configForms.get() entryId). The skin owns the namespace
+# `dsh-eac-skin-aurora` for its background-URL setting (covenant §4.2: skin
+# settings are skin-governed; the loader never touches another namespace).
+# Row id / registration id / package name are three different names, kept in
+# sync by src/identity.ts documentation:
+#   row id (settings ns) : dsh-eac-skin-aurora
+#   skin id (covenant §3): dsh-eac.skin.aurora
+#   package name         : @dsh-eac/skin-aurora
+- insert:
+    - id: dsh-eac-skin-aurora
+      name: "@dsh-eac/skin-aurora"
+      # disabled: true
+      # config: { … }   # patch replaces the whole config object, it does not merge (§13.4)

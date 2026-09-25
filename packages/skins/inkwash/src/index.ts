@@ -1,4 +1,15 @@
 /**
- * @dsh-eac/skin-inkwash 骨架占位。
+ * @dsh-eac/skin-inkwash 的 host 半（Node 侧，api-notes §1.3 形态）。
+ *
+ * inkwash 不提供自定义设置（公约 §4.2：皮肤可以不提供设置而不被区别对待），
+ * 因此：
+ * - 不导出 `Config` schema——设置命名空间不存在，宿主不会为它生成设置页；
+ * - `apply` 为 no-op（探针先例；皮肤的一切行为都在 client 半的激活会话里）。
  */
-export const SKIN_ID = "inkwash";
+
+import type { SkinHostContext } from "./context.ts";
+
+/** host 半入口（no-op：inkwash 的 host 半无任何需要登记的生命周期）。 */
+export function apply(ctx: SkinHostContext): void {
+  void ctx;
+}
