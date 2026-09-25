@@ -13,6 +13,7 @@ import type {
   ClientBundleRegistration,
   Disposer,
   DshAdapter,
+  DshEvents,
   DshLocale,
   DshModuleLoader,
   DshRemote,
@@ -25,6 +26,7 @@ import type {
   SlotComponent,
   SlotOptions,
   ThemeDefinition,
+  ThemeSnapshotInfo,
   ThemeTokenModes,
   Translate,
 } from "./types.ts";
@@ -60,6 +62,11 @@ interface UpstreamTheme {
     source: string,
     tokens: Record<string, ThemeTokenModes>,
   ): Disposer;
+  /** api-notes §7：快照读；adapter 只取 preference 与 active.colorScheme。 */
+  getTheme(): {
+    preference?: unknown;
+    active?: { colorScheme?: unknown };
+  };
 }
 
 /** api-notes §8.2：`ctx.configForms.get(entryId)` 返回的 ConfigForm 的 adapter 侧最小形态。 */
@@ -89,6 +96,14 @@ interface UpstreamRemote {
 }
 
 /**
+ * api-notes §7/§10：`ctx.on`（cordis emitter，发布树 events.d.ts L197）的 adapter 侧
+ * 最小形态——theme/change 与 locale/change 的订阅通道（宿主 ui-layout 同款形态）。
+ */
+interface UpstreamEvents {
+  on(event: string, listener: (...args: unknown[]) => unknown): unknown;
+}
+
+/**
  * api-notes §4/§5/§7/§8.2/§8.3/§10：client cordis context 的 adapter 侧最小结构形态
  * （client bundle 的 `apply(ctx)` 收到的 ctx；只描述 adapter 用到的成员）。
  * `effect` 即 cordis fiber 的副作用登记面（api-notes §2：unload 逆序释放，
@@ -107,6 +122,7 @@ export interface Dsh017ClientContext {
   readonly configForms: UpstreamConfigForms;
   readonly locale: UpstreamLocale;
   readonly remote: UpstreamRemote;
+  readonly on: UpstreamEvents["on"];
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +285,17 @@ function createThemeAdapter(upstream: UpstreamTheme): DshTheme {
       }
       return upstream.overrideTokens(source, tokens);
     },
+    getTheme(): ThemeSnapshotInfo {
+      // api-notes §7：快照读 + active.colorScheme 解析（preference 为 "system" 时上游已解析）。
+      const snapshot = upstream.getTheme();
+      const preference =
+        typeof snapshot?.preference === "string"
+          ? snapshot.preference
+          : "system";
+      const colorScheme =
+        snapshot?.active?.colorScheme === "dark" ? "dark" : "light";
+      return { preference, colorScheme };
+    },
   };
 }
 
@@ -352,6 +379,7 @@ export function createDsh017Adapter(upstream: Dsh017ClientContext): DshAdapter {
     settings: createSettingsAdapter(upstream.configForms),
     locale: createLocaleAdapter(upstream.locale),
     remote: createRemoteAdapter(upstream.remote),
+    events: createEventsAdapter({ on: upstream.on }),
     hostInfo: getHostInfo(),
   };
 }
@@ -364,6 +392,20 @@ function createRemoteAdapter(upstream: UpstreamRemote): DshRemote {
   return {
     $on(event: string, listener: (...args: unknown[]) => void): Disposer {
       return upstream.$on(event, listener);
+    },
+  };
+}
+
+/**
+ * api-notes §7/§10：`ctx.on` 语义投影——theme/change（亮暗自适应）与
+ * locale/change（双语跟随）的订阅通道。防御性包装：上游返回值仅在可调用时
+ * 视为 disposer（cordis `on` 在 fiber 未激活等边缘可返回 true/undefined）。
+ */
+function createEventsAdapter(upstream: UpstreamEvents): DshEvents {
+  return {
+    on(event: string, listener: (...args: unknown[]) => void): Disposer {
+      const result = upstream.on(event, listener);
+      return typeof result === "function" ? (result as Disposer) : () => undefined;
     },
   };
 }

@@ -192,6 +192,9 @@ function createFakeAdapter(settings: ReturnType<typeof createFakeSettings>) {
         };
       },
     },
+    events: {
+      on: () => () => undefined,
+    },
     hostInfo: { dshVersion: null, bootRev: null },
   };
   return {

@@ -102,6 +102,17 @@ export interface DshSlots {
   ): Disposer;
 }
 
+/**
+ * api-notes §7：主题快照的语义投影（控制台亮暗自适应消费的完整读取面）。
+ * 上游 ThemeSnapshot 另有 fontSize/themes/revision 等成员，控制台不需要，adapter 面裁剪。
+ */
+export interface ThemeSnapshotInfo {
+  /** api-notes §7：持久化偏好值（可能是 "system"）。 */
+  preference: string;
+  /** api-notes §7：当前生效配色（preference 为 system 时已按 prefers-color-scheme 解析）。 */
+  colorScheme: "light" | "dark";
+}
+
 /** api-notes §7：主题注册定义（tokens 是 `--dsw-alias-*` 别名层覆盖的单值表）。 */
 export interface ThemeDefinition {
   /** api-notes §7：主题 id（具体主题的 setTheme 实参；重复注册上游抛错）。 */
@@ -135,6 +146,11 @@ export interface DshTheme {
     source: string,
     tokens: Record<string, ThemeTokenModes>,
   ): Disposer;
+  /**
+   * api-notes §7：读取当前主题快照投影（getTheme + active.colorScheme 解析）。
+   * 持续跟随用 DshEvents.on("theme/change")（宿主 ui-layout 同款形态）。
+   */
+  getTheme(): ThemeSnapshotInfo;
 }
 
 /** api-notes §8.2：configForms 快照的语义投影（status/value/revision/writable；上游另有 base/user/mode，adapter 面省略）。 */
@@ -236,6 +252,21 @@ export interface DshRemote {
 }
 
 /**
+ * api-notes §7/§10：client 上下文事件订阅面（cordis emitter 的 `on`，发布树
+ * cordis/lib/types/events.d.ts L197；宿主消费 theme/change 的先例见 ui-layout client.js）。
+ * `theme/change`（payload = ThemeSnapshot）与 `locale/change`（payload = LocaleSnapshot）
+ * 分别是亮暗自适应与双语跟随的持续同步通道。
+ *
+ * ⚠️ 上游 `ctx.on` 把监听登记为「当前 fiber」的 effect——React 渲染/effect 回调不在
+ * cordis fiber 语境里，禁止从组件里调用；正确姿势是挂载期（ctx.effect 内）订阅一次、
+ * 自建广播给 React（见 console/env.ts）。
+ */
+export interface DshEvents {
+  /** 订阅一个上下文事件，返回移除该监听的 disposer（随调用方 fiber 级联）。 */
+  on(event: string, listener: (...args: unknown[]) => void): Disposer;
+}
+
+/**
  * adapter 聚合面——T2.4 SkinRuntime 的地基。
  * 注意：应基于「调用方自己的 client ctx」构造（见 dsh-0.1.7.ts 的 createDsh017Adapter 注释），
  * 不要跨 fiber 共享单例，否则上游按调用时 context 路由的 dispose 会进错 fiber。
@@ -246,5 +277,6 @@ export interface DshAdapter {
   readonly settings: DshSettings;
   readonly locale: DshLocale;
   readonly remote: DshRemote;
+  readonly events: DshEvents;
   readonly hostInfo: HostInfo;
 }

@@ -169,6 +169,9 @@ function createFakeTheme() {
       overrides.push({ source, tokens });
       return () => {};
     },
+    getTheme(): { preference: string; active: { colorScheme: "light" | "dark" } } {
+      return { preference: "system", active: { colorScheme: "light" } };
+    },
     registrations,
     overrides,
   };
@@ -319,6 +322,7 @@ function createFakeContext() {
   const provided = new Map<string, unknown>();
   const effectBodies: Array<() => (() => unknown) | void> = [];
   const remoteListeners = new Map<string, Set<(...args: unknown[]) => void>>();
+  const eventListeners = new Map<string, Set<(...args: unknown[]) => void>>();
   const ctx: Dsh017ClientContext = {
     provide(name: string, value: unknown): Disposer {
       provided.set(name, value);
@@ -352,8 +356,20 @@ function createFakeContext() {
         };
       },
     },
+    on(event, listener) {
+      // cordis ctx.on 形态（发布树 events.d.ts L197）：注册监听并返回 disposer。
+      let set = eventListeners.get(event);
+      if (!set) {
+        set = new Set();
+        eventListeners.set(event, set);
+      }
+      set.add(listener);
+      return () => {
+        set?.delete(listener);
+      };
+    },
   };
-  return { ctx, slots, theme, configForms, locale, provided, effectBodies, remoteListeners };
+  return { ctx, slots, theme, configForms, locale, provided, effectBodies, remoteListeners, eventListeners };
 }
 
 // ---------------------------------------------------------------------------
@@ -588,6 +604,13 @@ test("theme.overrideTokens rejects a pair missing the dark value", () => {
   assert.equal(theme.overrides.length, 0);
 });
 
+test("theme.getTheme projects preference and the resolved active color scheme", () => {
+  const { ctx } = createFakeContext();
+  const adapter = createDsh017Adapter(ctx);
+  const snapshot = adapter.theme.getTheme();
+  assert.deepEqual(snapshot, { preference: "system", colorScheme: "light" });
+});
+
 // ---------------------------------------------------------------------------
 // DshSettings：configForms 投影（§8.1/§8.2）
 // ---------------------------------------------------------------------------
@@ -689,6 +712,39 @@ test("locale.bind memoizes per namespace and translates through the dictionaries
 });
 
 // ---------------------------------------------------------------------------
+// DshEvents：ctx.on 订阅投影（§7 theme/change / §10 locale/change 的通道）
+// ---------------------------------------------------------------------------
+
+test("events.on forwards to ctx.on and the disposer removes the listener", () => {
+  const { ctx, eventListeners } = createFakeContext();
+  const adapter = createDsh017Adapter(ctx);
+  const received: unknown[][] = [];
+  const disposer = adapter.events.on("theme/change", (...args: unknown[]) => {
+    received.push(args);
+  });
+  const set = eventListeners.get("theme/change");
+  assert.equal(set?.size, 1);
+  for (const listener of set ?? []) {
+    listener({ active: { colorScheme: "dark" } });
+  }
+  assert.deepEqual(received, [[{ active: { colorScheme: "dark" } }]]);
+  disposer();
+  assert.equal(eventListeners.get("theme/change")?.size ?? 0, 0);
+});
+
+test("events.on tolerates a non-function upstream return value", () => {
+  const { ctx } = createFakeContext();
+  // cordis on 的返回值按 any 形态声明（卸载等待等边缘可返回 true/undefined）——
+  // adapter 防御性包装为 no-op disposer。
+  const probeCtx = {
+    ...ctx,
+    on: () => true,
+  } as unknown as Dsh017ClientContext;
+  const adapter = createDsh017Adapter(probeCtx);
+  assert.doesNotThrow(() => adapter.events.on("locale/change", () => undefined)());
+});
+
+// ---------------------------------------------------------------------------
 // HostInfo 与聚合面
 // ---------------------------------------------------------------------------
 
@@ -710,16 +766,18 @@ test("hostInfo returns nulls when the boot wire is absent", () => {
   assert.equal(info.bootRev, null);
 });
 
-test("createDsh017Adapter exposes the five semantic faces", () => {
+test("createDsh017Adapter exposes the semantic faces", () => {
   const { ctx } = createFakeContext();
   const adapter = createDsh017Adapter(ctx);
   assert.equal(typeof adapter.slots.register, "function");
   assert.equal(typeof adapter.slots.inject, "function");
   assert.equal(typeof adapter.theme.register, "function");
   assert.equal(typeof adapter.theme.overrideTokens, "function");
+  assert.equal(typeof adapter.theme.getTheme, "function");
   assert.equal(typeof adapter.settings.get, "function");
   assert.equal(typeof adapter.locale.register, "function");
   assert.equal(typeof adapter.locale.bind, "function");
+  assert.equal(typeof adapter.events.on, "function");
   assert.equal(adapter.hostInfo.dshVersion, null);
   assert.equal(adapter.hostInfo.bootRev, null);
 });

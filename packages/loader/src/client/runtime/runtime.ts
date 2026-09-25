@@ -870,6 +870,7 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
       ...(entry.reg.description === undefined ? {} : { description: entry.reg.description }),
       ...(entry.reg.tags === undefined ? {} : { tags: [...entry.reg.tags] }),
       ...(entry.reg.preview === undefined ? {} : { preview: entry.reg.preview }),
+      ...(entry.reg.settingsHint === undefined ? {} : { settingsHint: entry.reg.settingsHint }),
       ...(entry.slots === undefined ? {} : { slots: entry.slots.map((slot) => ({ ...slot })) }),
       status: entry.marks.has("suspect-residue")
         ? "suspect-residue"

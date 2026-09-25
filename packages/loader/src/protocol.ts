@@ -66,6 +66,13 @@ export interface SkinRegistration {
   tags?: string[];
   /** 内联 SVG 或相对路径。 */
   preview?: string;
+  /**
+   * 皮肤自定义设置的入口线索（T2.5 纯加法字段，公约 §4.2「皮肤自治」的可选补充）。
+   * 加载器控制台仅在皮肤声明了该字段时于卡片上展示「皮肤设置」指引（best effort：
+   * api-notes 无已验证的设置面板跨分区导航 API，加载器不导航也不解释其内容，
+   * 只如实展示皮肤声明的线索文本）。
+   */
+  settingsHint?: string;
   /** 公约 §6 自愿槽位贡献声明。 */
   slots?: SkinSlotDeclaration[];
   /** 自此才允许产生可见副作用；全部副作用必须可逆且经皮肤自身 ctx.effect 登记（公约 R8）。 */
@@ -121,6 +128,8 @@ export interface SkinInfo {
   description?: string;
   tags?: string[];
   preview?: string;
+  /** 登记时的 settingsHint 原文（可选；控制台卡片展示用，加载器不解释）。 */
+  settingsHint?: string;
   /** 公约 §6 自愿槽位贡献声明（登记原文）。 */
   slots?: SkinSlotDeclaration[];
   status: SkinStatus;
