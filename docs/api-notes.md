@@ -29,7 +29,7 @@
 | 启停粒度：patch 行 `disabled`；fiber dispose 逆序释放 `ctx.effect` | ✅ | 插件管理器只改 profile `cordis.patch.yml` 最后一个匹配行的 `disabled`；见 §9 |
 | `ctx.locale.register/bind` | ✅ | 两个 register 重载（typed 双语表 / untyped 单 locale）；见 §10 |
 | `ctx.webServer.register/registerFallback` | ✅ | `registerFallback` 全局仅一个 owner，第二个注册抛错；见 §11 |
-| 安装：`dsh plugin --profile <name> add <…>`；profile 在 `$DSH_HOME/profiles/<name>/` | ✅ | ⚠️ 兼容性闸门是 **peerDependencies 的 `@deepseek-ai/dsh*` semver 检查**（不是 engines.dsh）；见 §12 |
+| 安装：`dsh plugin --profile <name> add <…>`；profile 在 `$DSH_HOME/profiles/<name>/` | ✅ | ⚠️ 兼容性闸门是 **peerDependencies 的 `@deepseek-ai/dsh*` semver 检查**（声明了 peer 才检查；不是 engines.dsh）；见 §12 |
 
 **根本性新发现（PLAN 未预见）**：
 1. **R10 定案**——client 侧跨插件服务注入 = client bundle 顶层 `exports.inject = [服务名…]` + `exports.apply(ctx)`；package.json 的 `dsh.client.inject` 只是模块图依赖声明。详见 §4。
@@ -208,13 +208,24 @@ react / react/jsx-runtime / react-dom / react-dom/client
 
 | 名字 | 位置 | 语义 | 实测依据 |
 | --- | --- | --- | --- |
-| `dsh.client.inject` | package.json | **informational 的包名依赖**：模块到达顺序（factory 先注册）+ cordis entry 组合的包边。**不是服务注入** | `$NM/dsh-package-manifest/lib/types/types.d.ts` L79 原文 "Informational package-name dependencies, not Cordis service injection"；`$NM/dsh-client-modules/lib/types/client/manifest.d.ts` L52 注释 "Cordis separately uses the same package edges to compose entries" |
-| `exports.inject`（client） | client bundle 顶层导出 | **cordis 服务注入**：服务名数组；vendored Loader 组 fiber 时等这些服务就绪才调 `apply`。跨插件 client 协作的正道 | `$NM/dsh-client-ui-settings-general/lib/client.js` L934-950；`$NM/dsh-client-ui-settings/lib/types/client/config-form.d.ts` L94-97："the client bundle purity gate forbids cross-plugin value imports and directs cross-plugin collaboration through cordis services" |
-| `ctx.inject([…], cb)`（host/通用） | cordis Context | cordis 通用 API：创建子 fiber 等服务就绪后执行 cb（host 半用它拿 `webServer`/`settings` 等） | `$NM/dsh-client-ui-theme/lib/index.js` L88-94；`$NM/dsh-client-modules/lib/index.js` L525 |
+| `dsh.client.inject` | package.json | **informational 的包名依赖**：模块到达顺序（factory 先注册）+ cordis entry 组合的包边。**不是服务注入** | `$NM/dsh-package-manifest/lib/types/types.d.ts` L79 原文 "Informational package-name dependencies, not Cordis service injection"；`$NM/dsh-client-modules/lib/types/client/manifest.d.ts` L43-46 注释 "Cordis separately uses the same package edges to compose entries"（短语在 L45） |
+| `exports.inject`（client） | client bundle 顶层导出 | **cordis 服务注入**：服务名数组；vendored Loader 组 fiber 时等这些服务就绪才调 `apply`。跨插件 client 协作的正道 | `$NM/dsh-client-ui-settings-general/lib/client.js` L934-950；`$NM/dsh-client-ui-settings/lib/types/client/config-form.d.ts` L99-105（"the client bundle purity gate forbids cross-plugin value imports and directs cross-plugin collaboration through cordis services"，短语在 L102） |
+| `ctx.provide(name, value)` / `super(ctx, name)`（服务提供） | cordis Context / Service 基类 | **提供**命名服务：`ctx.provide(name, value)`（`$NM/cordis/lib/types/reflect.d.ts` L43、L144）；Service 子类 `super(ctx, name)` 在构造时立即注册并随拥有 fiber 卸载自动移除（`$NM/cordis/lib/types/service.d.ts` L1-6、L31-36）。官方实例见下方落地方案 | `ctx.provide("locale", locale)`：`$NM/dsh-client-locale/lib/client.js` L1526；`ctx.provide("theme", theme)`：`$NM/dsh-client-ui-theme/lib/client.js` L1582；`super(ctx, "configForms")`：`$NM/dsh-client-ui-settings/lib/client.js` L1284；`ctx.reflect.provide("uiRenderer", …)`：`$NM/dsh-client-ui-renderer/lib/client.js` L1844 |
+| `ctx.inject([…], cb)`（host/通用） | cordis Context | cordis 通用 API：创建子 fiber 等服务就绪后执行 cb（host 半用它拿 `webServer`/`settings` 等） | `$NM/dsh-client-ui-theme/lib/index.js` L88-94；`$NM/dsh-client-modules/lib/index.js` L552（`ClientModuleRegistry` 类定义 L506） |
+
+> ⚠️ **cordis 运行时没有 `ctx.service` 这个 API**：对整个 `$NM` 树 grep `ctx.service(` 零命中。提供服务一律用 `ctx.provide` / Service 基类。
 
 **对 PLAN §2.3 的落地方案（加载器接线）**：
-- 加载器 client 半提供皮肤注册服务：`exports.apply(ctx)` 里 `ctx.service("uiSkinLoader", …)`（cordis Service），皮肤 client 半 `exports.inject = ["slots", "uiSkinLoader"]` 后在 `apply` 里调 `ctx.uiSkinLoader.registerSkin(…)`。
-- 公约 §9 伪码 `ctx.inject(["uiSkinLoader"])` 对应上表第 2/3 行的形态；**package.json `inject: ["uiSkinLoader"]` 不承担此职责**（只保证模块先到达）。公约文本发布前应把伪码改为 `exports.inject` 语义。
+- 加载器 client 半提供皮肤注册服务：`exports.apply(ctx)` 里 **`ctx.provide("uiSkinLoader", skinRuntime)`**。cordis 服务提供 API 只有两种形态：
+  `ctx.provide(name, value)`（`$NM/cordis/lib/types/reflect.d.ts` L43、L144——"Same as above for service names outside the typed `Context` surface"）
+  或 Service 子类 `super(ctx, name)` 构造即注册、随 fiber 卸载自动移除（`$NM/cordis/lib/types/service.d.ts` L1-6、L31-36）。
+  **不存在 `ctx.service(...)`**（全 `$NM` 树 grep 零命中）。官方实例：
+  `ctx.provide("locale", locale)`（`$NM/dsh-client-locale/lib/client.js` L1526）、
+  `ctx.provide("theme", theme)`（`$NM/dsh-client-ui-theme/lib/client.js` L1582）、
+  Service 子类形态 `super(ctx, "configForms")`（`$NM/dsh-client-ui-settings/lib/client.js` L1284）、
+  `ctx.reflect.provide("uiRenderer", …)`（`$NM/dsh-client-ui-renderer/lib/client.js` L1844）。
+  皮肤 client 半 `exports.inject = ["slots", "uiSkinLoader"]` 后在 `apply` 里调 `ctx.uiSkinLoader.registerSkin(…)`。
+- 公约 §9 伪码 `ctx.inject(["uiSkinLoader"])` 对应上表 `exports.inject`（client 侧）与 `ctx.inject`（host 侧）两行的形态；**package.json `inject: ["uiSkinLoader"]` 不承担此职责**（只保证模块先到达）。公约文本发布前应把伪码改为 `exports.inject` 语义，并把"提供方"一侧写成 `ctx.provide`。
 - client 服务等待即"皮肤 fiber 存活期间只做 registerSkin 然后 apply 返回即停"的实现载体：把 `registerSkin` 调用放 apply 体内，apply 返回即结束，无 effect 登记 → fiber 空转不占副作用。
 
 ---
@@ -308,7 +319,7 @@ react / react/jsx-runtime / react-dom / react-dom/client
   `ThemeTokens = Record<string, string>`（`--dsw-alias-*` 别名层覆盖，单值）；重复 id 抛错（内置 light/dark 占位，
   `system` 是偏好值不是可注册 id）；dispose 掉当前激活主题会把偏好重置回默认。
 - `ctx.theme.overrideTokens(source, tokens: ThemeTokenOverrides) → disposer`（L178）：⚠️ `ThemeTokenOverrides =
-  Record<string, { light: string; dark: string }>`（L45-58）——**每个 token 必须同时给亮暗两值**（值不随 scheme 变化也要重复填）；
+  Record<string, { light: string; dark: string }>`（`ThemeTokenModes` L34-40、别名 L41）——**每个 token 必须同时给亮暗两值**（值不随 scheme 变化也要重复填）；
   同 source 再调 = 替换该层并重新置顶；裸字符串值抛教学错误。
 - `ctx.theme.setTheme(id)`（L143）：唯一偏好写入口；未知 id 抛错；接受 `system`。
 - `ctx.theme.getTheme(): ThemeSnapshot`（L131-137 快照读）；`theme/change` 事件（Context Events 声明，payload = ThemeSnapshot）✅；
@@ -323,8 +334,10 @@ react / react/jsx-runtime / react-dom / react-dom/client
 
 - `ctx.settings.configure({ auto?: boolean }, owner?: Fiber) → disposer`（`$NM/dsh-settings/lib/types/index.d.ts` L80-88）。
   注册本 entry 的设置页策略；`auto: false` = 不自动生成设置页（ui-theme 的用法）。
-- **命名空间 == Loader entry id**（= cordis.patch.yml 插入行的 `id`）：`SettingsDescriptor.ns` 注释
-  "ns: Profile entry id"（同文件 L14）；ui-theme 的 patch 行 id 为 `ui-theme`、其 `THEME_SETTINGS_NAMESPACE = "ui-theme"`。
+- **命名空间 == Loader entry id**（= cordis.patch.yml 插入行的 `id`）：update/replace/mutate 的
+  `@param ns Profile entry id` 注释（`$NM/dsh-settings/lib/types/index.d.ts` L98/L104/L110；
+  `SettingsDescriptor.ns` 字段本身无注释，L8-18）；ui-theme 的 patch 行 id 为 `ui-theme`、
+  其 `THEME_SETTINGS_NAMESPACE = "ui-theme"`（`lib/index.js` L11 + `lib/client.js` L992）。
   → 加载器用行 id `ui-skin-loader` 后，host 写、client 读（`configForms.get("ui-skin-loader")`）自动对上。
 - 写接口：`update/replace/mutate(ns, …, expectedRevision?)`，冲突抛 `SettingsConflictError`（code `SETTINGS_CONFLICT`）。
 
@@ -393,8 +406,11 @@ react / react/jsx-runtime / react-dom / react-dom/client
 ### 12.1 CLI
 
 - `dsh plugin --profile <name> <pnpm-args…>`：**转发给 pnpm**（在 profile 目录内执行），DSH 只拦截
-  `version-exemptions / allow-version / revoke-version` 三个自有命令（`$NM/dsh/lib/plugin-DkYIj96-.js` L83 全文；
-  `$NM/dsh/lib/bin.js` L114-121）。
+  `version-exemptions / allow-version / revoke-version` 三个自有命令。转发证据链：命令注册及描述
+  "manage a profile's plugins by forwarding the remaining arguments to pnpm in the profile directory"
+  （`$NM/dsh/lib/bin.js` L114-115）→ `runPlugin` 调 `runPluginCommand`（`$NM/dsh/lib/plugin-DkYIj96-.js` L58-78，
+  调用点 L63；`runPluginCommand` 自 `$NM/dsh-plugin-manager/operations` 导入，L6）→ 实际执行 pnpm 的进程创建
+  `$NM/dsh-plugin-manager/lib/index.js` L517 `execa(options.command ?? "pnpm", [...args…], { cwd: dir, … })`。
 - `add` spec 支持：npm 包名、**本地路径**（实测 `link:` 方式装入）、git 地址、tarball；git+tarball 的兼容性判定在
   装完后做（失败会恢复 manifest+lockfile）。
 - profile 目录：`$DSH_HOME/profiles/<name>/`（`package.json` + `cordis.yml`（勿改）+ `cordis.patch.yml`（用户层）+
@@ -407,7 +423,12 @@ react / react/jsx-runtime / react-dom / react-dom/client
   `engines.dsh` 是声明性的，**安装器不强制**（`$NM/dsh-package-manifest/README.zh.md` "已知限制"）。
   实现：`$NM/dsh-app-boot/lib/index.js` L286-313 `evaluatePluginCompatibility`；豁免走 profile 的 `compatibility.json`
   + `dsh plugin allow-version <pkg@ver> --dsh-version <runtime> --accept-risk`。
-- → **加载器与皮肤包必须声明 `peerDependencies: { "@deepseek-ai/dsh": "0.1.7-rc.2" }`（或兼容 semver），否则装不上。**
+- ⚠️ **闸门只作用于声明了 peer 的包**：`evaluatePluginCompatibility` 开头
+  `if (!Object.hasOwn(fields, "peerDependencies")) return void 0;`（同文件 L289）——完全不声明 peerDependencies
+  的包**跳过检查而非被拒**。准确规则：**凡声明了 `@deepseek-ai/dsh*` peer，其 semver 必须满足运行时版本
+  （includePrerelease），否则安装被拒**。
+- → 推荐动作不变：加载器与皮肤包声明 `peerDependencies: { "@deepseek-ai/dsh": "0.1.7-rc.2" }`（或兼容 semver），
+  主动参与闸门校验并向安装方表达兼容承诺。
 - pnpm 11 阻止依赖构建脚本时安装报 `pendingBuilds`；我们的包无构建脚本，不受影响；git 插件需在 profile
   `pnpm-workspace.yaml` 的 `allowBuilds` 里放行 prepare。
 
