@@ -1,0 +1,12 @@
+{
+  "name": "@dsh-eac/skin-aurora",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "node --test \"src/**/*.test.ts\""
+  }
+}

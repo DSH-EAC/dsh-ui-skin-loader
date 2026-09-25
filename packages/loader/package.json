@@ -1,0 +1,13 @@
+{
+  "name": "@dsh-eac/ui-skin-loader",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "//": "TODO(T2.3+): 预留 dsh.client / dsh.ecosystem.ui-skin-loader 清单字段；字段形态与取值待 T2.2 实机核对后填写，骨架期不写死。",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "node --test \"src/**/*.test.ts\""
+  }
+}
