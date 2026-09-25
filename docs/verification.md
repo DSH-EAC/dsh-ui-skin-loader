@@ -44,7 +44,7 @@ cd .verify/probe && DSH_HOME=<loader>/.verify/dsh-home-t9 npx dsh --profile web 
 | --- | --- | --- | --- |
 | V1 | 干净内核 boot | ✅ | `boot-v1.log` 1 行零 error/warn；HTTP 401 fence / 303+cookie / 200 |
 | V2 | 三包经安装链装入 | ✅ | tarball 安装成功；`boot-v2.log` 零 error/warn；两卡均 discovered 未激活 |
-| V3 | 单元测试 node --test | ✅ | 本地复跑 95+21+9=125 全绿；CI run 36186179771（战役起点 HEAD）success |
+| V3 | 单元测试 node --test | ✅ | 基线本地 93 全绿；修复后本地 125 全绿（postfix 日志）；CI run 36191827871 双平台 success |
 | V4 | 控制台渲染（亮/暗） | ✅ | 截图 19/19b/20/20b 卡片墙完整；console error/warning 均为 0 |
 | V5 | 热切换 aurora→inkwash→default | ✅ | 16/16 断言；settled 截图 21/22/23；残留与 theme 覆盖全零；归一化 outerHTML 逐字节一致 |
 | V6 | 持久化 | ✅ | 7/7 断言；aurora 跨重启恢复（恢复重放路径）+ default 同样持久；截图 24/25 |
@@ -62,7 +62,7 @@ cd .verify/probe && DSH_HOME=<loader>/.verify/dsh-home-t9 npx dsh --profile web 
 - 截图：`.verify/shots/01-…28`（清单见 §3.10）
 - 实机脚本（证据可重放）：`.verify/pw/t9-lib.mjs` + `t9-empty.mjs` / `t9-wall.mjs` / `t9-switch.mjs` / `t9-persist.mjs` / `t9-crosstab.mjs` / `t9-fault.mjs`
 - 路径审计：`.verify/audit-t9/real-dsh-snapshot-{start,end}.txt`（起止两次全量清单 + diff 为空）
-- 测试日志：`.verify/audit-t9/v3-local-test.log`
+- 测试日志：`.verify/audit-t9/v3-local-test.log`（修复前基线）+ `v3-local-test-postfix.log`（修复后，145b1f0 构建）
 
 ---
 
@@ -91,15 +91,21 @@ dsh web: http://127.0.0.1:18601/?token=sAIVrMSKsXCk5SfDT4hP_nGzvoGGQaf9_GFCU68q7
 
 ### 3.3 V3 单元测试 ✅
 
-本地复跑（`pnpm -r test`，Node 24 type-stripping，`node --test`）：
+本地复跑两次（`pnpm -r test`，Node 24 type-stripping，`node --test`），与战役的两个构建状态一一对应：
 
 ```
-packages/loader        tests 95  pass 95  fail 0
+基线（修复前构建 02045ab，日志 .verify/audit-t9/v3-local-test.log，04:51）：
+packages/loader        tests 93  pass 93  fail 0
+packages/skins/aurora  tests 21  pass 21  fail 0
+packages/skins/inkwash tests  9  pass  9  fail 0
+
+修复后（提交 145b1f0 构建重跑，日志 .verify/audit-t9/v3-local-test-postfix.log，05:43）：
+packages/loader        tests 95  pass 95  fail 0   （+2：V7 缺陷回归测试，见 §4）
 packages/skins/aurora  tests 21  pass 21  fail 0
 packages/skins/inkwash tests  9  pass  9  fail 0
 ```
 
-覆盖切换/回滚/恢复/adapter/设置投影/故障隔离/跨标签页同步（含本战役新增回归测试，见 §4）。CI 佐证：run [36186179771](https://github.com/DSH-EAC/dsh-ui-skin-loader/actions/runs/36186179771)（战役起点 HEAD `02045ab`，ubuntu+windows 双平台）success；本战役代码修复后的 CI 以推送后的 run 为准。
+覆盖切换/回滚/恢复/adapter/设置投影/故障隔离/跨标签页同步（含本战役新增回归测试，见 §4）。CI 佐证：战役起点 HEAD `02045ab` run [36186179771](https://github.com/DSH-EAC/dsh-ui-skin-loader/actions/runs/36186179771) success；**修复后推送** run [36191827871](https://github.com/DSH-EAC/dsh-ui-skin-loader/actions/runs/36191827871)（`145b1f0`+`fdef547`）ubuntu+windows 双平台 success——与上方修复后本地 95/21/9 一致。
 
 ### 3.4 V4 控制台渲染（亮/暗）✅
 
