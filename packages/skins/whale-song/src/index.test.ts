@@ -47,8 +47,10 @@ const vendoredSource = readFileSync(
 test("vendored module keeps the upstream skin namespace and drops the bundling shell", () => {
   assert.ok(vendoredSource.includes(`body[${ACTIVE_BODY_MARKER}]`), "upstream CSS stays scoped to its own body marker");
   assert.ok(vendoredSource.includes("data-plugin-css"), "upstream style-node marker kept");
-  assert.ok(vendoredSource.includes("data:image/webp"), "the ocean artwork travels with the bundle");
-  assert.ok(vendoredSource.includes("data:image/png"), "the whale favicon travels with the bundle");
+  assert.ok(vendoredSource.includes("BACKDROP_TREATMENT"), "non-figurative watercolor CSS treatment in place (R13)");
+  assert.ok(!vendoredSource.includes("data:image/webp"), "figurative backdrop artwork removed (R13)");
+  assert.ok(!vendoredSource.includes("const WHALE_ART"), "figurative art constant fully removed (R13)");
+  assert.ok(vendoredSource.includes("data:image/png"), "the host-brand whale favicon travels with the bundle (retained per R13)");
   assert.ok(vendoredSource.includes("export { apply };"), "ESM export appended");
   for (const forbidden of [
     "window.__ModuleLoader__",

@@ -221,8 +221,9 @@ test("whale-song activate paints the body backdrop and deactivate restores every
 
   assert.equal(env.body.dataset.dshWhaleSong, "", "body activation marker set");
   const image = String(env.body.style.getPropertyValue("background-image"));
-  assert.ok(image.includes("data:image/webp"), "ocean artwork applied from the vendored art constant");
-  assert.ok(image.includes("linear-gradient"), "theme scrim layered over the art");
+  assert.ok(image.includes("radial-gradient"), "non-figurative watercolor treatment applied (R13)");
+  assert.ok(image.includes("linear-gradient"), "theme scrim layered over the treatment");
+  assert.ok(!image.includes("data:image"), "no bitmap asset in the backdrop (figurative art removed, R13)");
   assert.equal(env.body.style.getPropertyValue("background-position"), "center");
   assert.ok(env.headChildren.length >= 2, "style node + favicon mounted");
   const favicon = env.headChildren.find((n) => n.rel === "icon");
@@ -264,7 +265,8 @@ test("whale-song theme flip re-renders the scrim through the observer", (t) => {
   env.lastObserver()!.trigger();
   const darkImage = String(env.body.style.getPropertyValue("background-image"));
   assert.notEqual(darkImage, lightImage, "dark scrim swapped in");
-  assert.ok(darkImage.includes("data:image/webp"));
+  assert.ok(darkImage.includes("radial-gradient"));
+  assert.ok(!darkImage.includes("data:image"), "no bitmap asset in the backdrop (R13)");
 });
 
 test("whale-song teardown is idempotent when driven through deactivate", (t) => {

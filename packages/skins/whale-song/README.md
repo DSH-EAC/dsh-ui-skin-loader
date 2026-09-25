@@ -1,6 +1,6 @@
 # @dsh-eac/skin-whale-song 「鲸吟」
 
-**深海鲸语女神氛围背景 · 冰蓝海洋调色板 · 金色细线点缀**——自
+**深海氛围背景 · 冰蓝海洋调色板 · 金色细线点缀**——自
 `DSH-Desktop-EAC` 迁移进本仓的公约化皮肤（Task 10 / Phase3A）。观感与行为
 内容**原样迁移**自 dsh-web-ui 的预构建皮肤包（BSD-3-Clause © zhu1090093659，
 经 DSH-Desktop-EAC@`26841f5` 分发），执行骨架重写为公约形态
@@ -8,9 +8,11 @@
 
 ## 原皮肤观感
 
-无文字纯氛围背景画（蓝发女神与鲸群居左、冰蓝星座网格与金线点缀、右侧大量
-留白）垫在半透明面板之下，遮罩随亮/暗主题实时切换（暗色变体为深海夜航调），
-冰蓝/浅青/深海军蓝/钴蓝冷色体系重映射到全部 dsh token。
+无文字纯氛围背景：冰蓝水彩式天光与海面（R13 裁定后为**非具象**的渐变处理：
+天光晕染 + 钴蓝辉光 + 深海军蓝海脚 + 金色细线点彩，取自原皮肤色板），垫在
+半透明面板之下，遮罩随亮/暗主题实时切换（暗色变体为深海夜航调），冰蓝/浅青/
+深海军蓝/钴蓝冷色体系重映射到全部 dsh token。原上游背景画为具象人物插画
+（蓝发女神与鲸群），已按 controller R13 裁定移除替换（见下）。
 
 ## 包结构（与 aurora/inkwash 先例对称）
 
@@ -49,11 +51,12 @@ packages/skins/whale-song/
 | `apply(ctx)` 立即改写 body 内联背景/挂 favicon/起观察器 | 全部收进 `activate`（session.ts 适配层调用 vendored apply） |
 | `ctx.effect(disposer)` 由 cordis 卸载驱动 | disposer 进会话账本，`deactivate`/abort/fiber dispose 三路汇入幂等 teardown（R8）；上游自身的 body 内联样式 round-trip 还原语义原样保留 |
 | 样式节点随插件常驻、从不移除 | teardown 按自有 `data-plugin` 标记清扫自产 style 节点（§4.3「退出后不可观测」的补齐） |
+| 具象背景画（人物插画 data URI，R13 裁定） | **移除**，替换为原色板派生的非具象水彩式 CSS 处理（`BACKDROP_TREATMENT`）；favicon（宿主自有品牌）按同一裁定保留 |
 
-vendored 文件的全部改动（去壳、上述 S3 移位、`export { apply }`）逐条记录在
-`src/vendor/dsh-web-ui-client.js` 文件头；除这些外与上游产物逐字节一致
-（含 esbuild region 标记与原注释）。背景画与 favicon 以 data URI 随 bundle
-原样携带。上游 CSS-module 哈希类名（如有）作为观感内容原样保留，CSS 文本与
+vendored 文件的全部改动（去壳、上述 S3 移位、R13 素材替换、`export { apply }`）
+逐条记录在 `src/vendor/dsh-web-ui-client.js` 文件头；除这些外与上游产物逐字节
+一致（含 esbuild region 标记与原注释）。favicon 以 data URI 随 bundle 原样
+携带。上游 CSS-module 哈希类名（如有）作为观感内容原样保留，CSS 文本与
 类名映射表成对迁移、自洽封闭，不构成对上游构建产物的运行时依赖（R5）。
 
 说明：上游背景层读取可选变量 `--dsw-skin-scrim`（原皮肤中心的背景遮罩控制

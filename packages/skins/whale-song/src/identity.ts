@@ -36,6 +36,6 @@ export const SKIN_META = {
   version: "1.0.0",
   author: "DSH-EAC",
   description:
-    "深海鲸语女神氛围背景 · 冰蓝海洋调色板 · 金色细线点缀（自 DSH-Desktop-EAC 迁移，covenant-converted；上游 dsh-web-ui，BSD-3-Clause）。",
-  tags: ["whale", "ocean", "ice-blue", "goddess", "art", "translucent", "migrated"],
+    "深海氛围背景 · 冰蓝海洋调色板 · 金色细线点缀（自 DSH-Desktop-EAC 迁移，covenant-converted；上游 dsh-web-ui，BSD-3-Clause；具象原画已按 R13 移除，替换为原色板派生的非具象水彩式 CSS 处理）。",
+  tags: ["whale", "ocean", "ice-blue", "art", "translucent", "migrated"],
 } as const;

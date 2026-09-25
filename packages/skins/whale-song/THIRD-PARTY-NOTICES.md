@@ -35,16 +35,22 @@ activate，disposer 账本逆序幂等 teardown，并补齐上游没有的 style
 
 逐项核对本包内嵌资产（client bundle 数据 URI 与预览图）：
 
-- 海洋背景画（蓝发女神与鲸群，1920x1080 WebP）：上游 art.ts 注释自述为
-  「《鲸吟》概念画的氛围重制版」（文字元素已去除的 AI 再生成纯氛围画）。
-  主题宇宙属于宿主产品自身的品牌叙事（DeepSeek 鲸），**无**可识别的第三方
-  角色/商标/品牌素材。
-- favicon：上游注释自述为 deepseek.com 官方蓝鲸标记（`#4d6bfe`，取自
-  deepseek.com/favicon.ico 的 PNG 转制）——这是**宿主产品自身的品牌标记**
-  （与本仓生态桌面端应用图标同源），作为宿主自己客户端内的 favicon 使用，
-  非对第三方品牌的挪用。如实记录于此，供 controller 复核。
+- **背景画（已移除，R13 裁定）**：上游 art.ts 注释自述为「《鲸吟》概念画的
+  氛围重制版」（1920x1080 WebP，蓝发女神与鲸群）。controller 复核（R13）认定
+  其为完整人物插画、与 maid-atelier 被停的同源鲸鱼娘角色链同一视觉宇宙
+  （注释级自述不足以支撑权属），**已从本包移除**，替换为皮肤原色板派生的
+  **非具象水彩式 CSS 处理**（`BACKDROP_TREATMENT`：冰蓝天光晕染 + 钴蓝辉光 +
+  深海军蓝海面 + 金色细线点缀的抽象化点彩——figurative artwork removed for
+  IP caution（unknown provenance, same visual universe as maid-atelier
+  CC BY-NC-SA chain）, replaced with original gradient）。移除记录见
+  `src/vendor/dsh-web-ui-client.js` 文件头第 4 条；预览图同步改为非具象 SVG。
+- favicon（**保留，R13 裁定**）：上游注释自述为 deepseek.com 官方蓝鲸标记
+  （`#4d6bfe`，取自 deepseek.com/favicon.ico 的 PNG 转制）——这是**宿主产品
+  自身的品牌标记**（与本仓生态桌面端应用图标同源），作为宿主自己客户端内的
+  favicon 使用，非对第三方品牌的挪用。R13 明确保留，记录不变。
 
-未发现第三方商标/角色/品牌素材。
+移除后本包**不含任何具象人物/角色/剪影素材**；`data:image/webp` 位图资产为零
+（index.test.ts 内容锁断言）。
 
 ## BSD 3-Clause License（上游原文）
 
