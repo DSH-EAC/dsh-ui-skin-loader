@@ -33,7 +33,7 @@ export const SKIN_META = {
   id: SKIN_ID,
   name: "交易终端",
   version: "1.0.0",
-  author: "DSH-EAC",
+  author: "zhu1090093659 (dsh-web-ui) · DSH-EAC (covenant conversion)",
   description:
     "实时行情跑马灯 · 交易时段状态栏 · 红涨绿跌配色（自 DSH-Desktop-EAC 迁移，covenant-converted；上游 dsh-web-ui，BSD-3-Clause）。",
   tags: ["stock", "trading", "ticker", "live", "terminal", "migrated"],

@@ -34,7 +34,7 @@ export const SKIN_META = {
   id: SKIN_ID,
   name: "龙的传人",
   version: "1.0.0",
-  author: "DSH-EAC",
+  author: "zhu1090093659 (dsh-web-ui) · DSH-EAC (covenant conversion)",
   description:
     "不屈龙魂 · 万里长城双主题 · 朱砂龙印（自 DSH-Desktop-EAC 迁移，covenant-converted；上游 dsh-web-ui，BSD-3-Clause）。",
   tags: ["dragon", "loong", "chinese", "ink-wash", "great-wall", "dual-theme", "migrated"],

@@ -34,7 +34,7 @@ export const SKIN_META = {
   id: SKIN_ID,
   name: "鲸吟",
   version: "1.0.0",
-  author: "DSH-EAC",
+  author: "zhu1090093659 (dsh-web-ui) · DSH-EAC (covenant conversion)",
   description:
     "深海氛围背景 · 冰蓝海洋调色板 · 金色细线点缀（自 DSH-Desktop-EAC 迁移，covenant-converted；上游 dsh-web-ui，BSD-3-Clause；具象原画已按 R13 移除，替换为原色板派生的非具象水彩式 CSS 处理）。",
   tags: ["whale", "ocean", "ice-blue", "art", "translucent", "migrated"],
