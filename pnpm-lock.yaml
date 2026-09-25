@@ -48,6 +48,8 @@ importers:
 
   packages/skins/trading: {}
 
+  packages/skins/whale-song: {}
+
 packages:
 
   '@cacheable/memory@2.2.0':

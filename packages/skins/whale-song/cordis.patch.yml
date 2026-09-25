@@ -1,0 +1,15 @@
+# Bundle patch layer of @dsh-eac/skin-whale-song (api-notes §1.2 form).
+#
+# Row id is only the entry id: whale-song ships NO Config schema and NO
+# settings UI (covenant §4.2 — a skin may offer no custom settings and must
+# not be treated differently; same shape as the inkwash precedent).
+#   row id               : dsh-eac-skin-whale-song
+#   skin id (covenant §3): dsh-eac.skin.whale-song
+#   package name         : @dsh-eac/skin-whale-song
+# Upstream (dsh-web-ui) used the row id ui-skin-whale-song with the same
+# always-wired semantics; under the covenant the row is only an entry id —
+# activation is decided exclusively by the loader.
+- insert:
+    - id: dsh-eac-skin-whale-song
+      name: "@dsh-eac/skin-whale-song"
+      # disabled: true
