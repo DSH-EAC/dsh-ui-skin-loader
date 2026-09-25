@@ -15,6 +15,7 @@ import type {
   DshAdapter,
   DshLocale,
   DshModuleLoader,
+  DshRemote,
   DshSettings,
   DshSettingsForm,
   DshSlots,
@@ -82,17 +83,30 @@ interface UpstreamLocale {
   bind(ns: string): Translate;
 }
 
+/** api-notes §8.3：`ctx.remote` 的 adapter 侧最小形态（加载器只订阅转发事件）。 */
+interface UpstreamRemote {
+  $on(event: string, listener: (...args: unknown[]) => void): Disposer;
+}
+
 /**
- * api-notes §4/§5/§7/§8.2/§10：client cordis context 的 adapter 侧最小结构形态
+ * api-notes §4/§5/§7/§8.2/§8.3/§10：client cordis context 的 adapter 侧最小结构形态
  * （client bundle 的 `apply(ctx)` 收到的 ctx；只描述 adapter 用到的成员）。
+ * `effect` 即 cordis fiber 的副作用登记面（api-notes §2：unload 逆序释放，
+ * disposer 可异步、unload 会等待）——T2.4 运行时经它登记生命周期清理。
  */
 export interface Dsh017ClientContext {
   /** api-notes §4：`ctx.provide(name, value)` → disposer——服务提供的唯一形态（运行时无 `ctx.service`）。 */
   provide(name: string, value: unknown): Disposer;
+  /**
+   * api-notes §2：`ctx.effect(execute, label?)`——execute 同步返回 disposer（可返回
+   * 异步 disposer，unload 会 await）；返回值是 AsyncDisposable，调用方通常忽略。
+   */
+  effect(execute: () => (() => unknown) | void, label?: string): unknown;
   readonly slots: UpstreamSlots;
   readonly theme: UpstreamTheme;
   readonly configForms: UpstreamConfigForms;
   readonly locale: UpstreamLocale;
+  readonly remote: UpstreamRemote;
 }
 
 // ---------------------------------------------------------------------------
@@ -324,7 +338,7 @@ function createLocaleAdapter(upstream: UpstreamLocale): DshLocale {
 // ---------------------------------------------------------------------------
 
 /**
- * api-notes §4/§5/§7/§8.2/§10：基于 client cordis ctx 构造 adapter 聚合面。
+ * api-notes §4/§5/§7/§8.2/§8.3/§10：基于 client cordis ctx 构造 adapter 聚合面。
  *
  * ⚠️ 应基于「调用方自己的 client ctx」构造：上游 SlotRegistry 经 cordis service proxy
  * 在调用时把 `this.ctx` 绑定到调用方 context（api-notes §5），dispose 因此路由进调用方 fiber。
@@ -337,6 +351,19 @@ export function createDsh017Adapter(upstream: Dsh017ClientContext): DshAdapter {
     theme: createThemeAdapter(upstream.theme),
     settings: createSettingsAdapter(upstream.configForms),
     locale: createLocaleAdapter(upstream.locale),
+    remote: createRemoteAdapter(upstream.remote),
     hostInfo: getHostInfo(),
+  };
+}
+
+/**
+ * api-notes §8.3：`ctx.remote.$on` 语义投影——T2.4 加载器跨标签页重放切换
+ * 直接订阅 `settings/document-updated`（api-notes §8.3 的明确指引）。
+ */
+function createRemoteAdapter(upstream: UpstreamRemote): DshRemote {
+  return {
+    $on(event: string, listener: (...args: unknown[]) => void): Disposer {
+      return upstream.$on(event, listener);
+    },
   };
 }

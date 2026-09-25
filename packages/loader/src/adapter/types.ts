@@ -225,7 +225,18 @@ export interface HostInfo {
 }
 
 /**
- * adapter 聚合面——T2.4 SkinRuntimeContext 的地基（本任务不定稿 SkinRuntimeContext）。
+ * api-notes §8.3：client 远端事件订阅面（`ctx.remote.$on`，SSE 通道）。
+ * 只暴露加载器跨标签页重放需要的 `$on`；事件名以 dsh-api-remotes 的
+ * remote-events 表为准（`settings/document-updated` 为 emit 模式，
+ * 载荷 = `(entryId, revision)`——dsh-settings 在命名空间文档变更时 emit）。
+ */
+export interface DshRemote {
+  /** 订阅一个转发远端事件，返回移除该监听的 disposer（随调用方 fiber 级联）。 */
+  $on(event: string, listener: (...args: unknown[]) => void): Disposer;
+}
+
+/**
+ * adapter 聚合面——T2.4 SkinRuntime 的地基。
  * 注意：应基于「调用方自己的 client ctx」构造（见 dsh-0.1.7.ts 的 createDsh017Adapter 注释），
  * 不要跨 fiber 共享单例，否则上游按调用时 context 路由的 dispose 会进错 fiber。
  */
@@ -234,5 +245,6 @@ export interface DshAdapter {
   readonly theme: DshTheme;
   readonly settings: DshSettings;
   readonly locale: DshLocale;
+  readonly remote: DshRemote;
   readonly hostInfo: HostInfo;
 }

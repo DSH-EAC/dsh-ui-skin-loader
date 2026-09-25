@@ -317,6 +317,8 @@ function createFakeContext() {
   const configForms = createFakeConfigForms();
   const locale = createFakeLocale();
   const provided = new Map<string, unknown>();
+  const effectBodies: Array<() => (() => unknown) | void> = [];
+  const remoteListeners = new Map<string, Set<(...args: unknown[]) => void>>();
   const ctx: Dsh017ClientContext = {
     provide(name: string, value: unknown): Disposer {
       provided.set(name, value);
@@ -329,12 +331,29 @@ function createFakeContext() {
         provided.delete(name);
       };
     },
+    effect(execute) {
+      effectBodies.push(execute);
+      return undefined;
+    },
     slots,
     theme,
     configForms,
     locale,
+    remote: {
+      $on(event, listener) {
+        let set = remoteListeners.get(event);
+        if (!set) {
+          set = new Set();
+          remoteListeners.set(event, set);
+        }
+        set.add(listener);
+        return () => {
+          set?.delete(listener);
+        };
+      },
+    },
   };
-  return { ctx, slots, theme, configForms, locale, provided };
+  return { ctx, slots, theme, configForms, locale, provided, effectBodies, remoteListeners };
 }
 
 // ---------------------------------------------------------------------------
