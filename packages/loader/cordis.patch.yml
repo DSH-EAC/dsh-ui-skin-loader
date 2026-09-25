@@ -1,0 +1,12 @@
+# Bundle patch layer of @dsh-eac/ui-skin-loader (api-notes §1.2).
+#
+# Row id doubles as the settings namespace (api-notes §8.1: entry id == settings
+# namespace == configForms.get() entryId) and matches the reserved settings
+# namespace `dsh-ui-skin-loader` (公约保留面). Upstream precedent: ui-theme's
+# patch row id `ui-theme` == its THEME_SETTINGS_NAMESPACE.
+# The plugin manager's enable/disable toggle flips `disabled` on this row (§9).
+- insert:
+    - id: dsh-ui-skin-loader
+      name: "@dsh-eac/ui-skin-loader"
+      # disabled: true
+      # config: { … }   # patch replaces the whole config object, it does not merge (§13.4)

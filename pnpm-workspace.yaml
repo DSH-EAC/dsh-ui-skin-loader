@@ -1,3 +1,9 @@
 packages:
   - "packages/*"
   - "packages/skins/*"
+
+# peerDependencies（@deepseek-ai/dsh*）由 DSH 运行时在插件安装期提供（api-notes §12.2 兼容闸门），
+# 开发工作区不安装：adapter 层刻意零上游依赖（只编码调用形态，docs/api-notes.md 为权威），
+# 避免 CI 拉取整棵 dsh 依赖树。
+autoInstallPeers: false
+
