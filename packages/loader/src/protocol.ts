@@ -96,7 +96,10 @@ export interface SkinSlotHandle {
 export interface SkinContext {
   /** 结构化 logger（前缀皮肤 id）。 */
   logger: Logger;
-  /** 激活被中止（切换被更新的请求取代、激活超时、加载器停用）。 */
+  /**
+   * 激活被中止（切换被更新的请求取代、激活超时、加载器停用、
+   * 皮肤被宿主停用/卸载导致反登记——加载器随即撤销其账本登记）。
+   */
   signal: AbortSignal;
   /** 扩展槽位句柄（公约 §6；贡献受 adapter DshSlots 支持）。 */
   slots: SkinSlotHandle;
@@ -147,6 +150,7 @@ export interface FaultEntry {
     | "activate-timeout"
     | "deactivate-timeout"
     | "deactivate-failed"
+    | "active-unregistered"
     | "recovery-unregistered"
     | "recovery-failed"
     | "recovery-invalid-value"

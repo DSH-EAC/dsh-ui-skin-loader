@@ -264,6 +264,7 @@ function createHarness(options?: {
   initialSettings?: Partial<LoaderSettingsValue>;
   timeouts?: { deactivateMs?: number; activateMs?: number };
   recovery?: { readyMs?: number; graceMs?: number };
+  unregisterGraceMs?: number;
 }): Harness {
   const clock = createFakeClock();
   const settings = createFakeSettings(options?.initialSettings);
@@ -273,6 +274,7 @@ function createHarness(options?: {
     timers: clock.timers,
     timeouts: options?.timeouts ?? { deactivateMs: 25, activateMs: 25 },
     recovery: options?.recovery ?? { readyMs: 25, graceMs: 25 },
+    unregisterGraceMs: options?.unregisterGraceMs ?? 50,
   });
   const service = runtime.expose();
   const offStart = runtime.start();
@@ -883,16 +885,96 @@ test("re-registering the same id replaces the entry and voids the stale off() (H
   assert.equal(h.service.list().length, 0);
 });
 
-test("unregistering an ACTIVE skin keeps the captured record switchable (documented boundary)", async () => {
-  const h = createHarness();
-  const a = makeSkin("alpha");
+test("unregistering an ACTIVE skin (host-side disable): ledger revoked immediately, falls back to default after grace expiry", async () => {
+  const h = createHarness({ unregisterGraceMs: 50 });
+  const a = makeSkin("alpha", {
+    activate(ctx) {
+      ctx.slots.register({ kind: "list", name: "settings.section", id: "alpha-section" }, () => null);
+      ctx.slots.inject("settings.section", () => undefined);
+    },
+  });
   const off = h.service.registerSkin(a);
   await h.service.switchTo("alpha");
+  assert.equal(h.remote.slotEntries[0]?.disposed, false);
+  assert.equal(h.service.current(), "alpha");
+
+  off(); // 宿主停用 → 皮肤 fiber dispose → off()
+  // (a) 账本立即撤销，不依赖已死 fiber；deactivate 不被调用
+  assert.equal(h.remote.slotEntries[0]?.disposed, true);
+  assert.equal(h.remote.injectEntries[0]?.disposed, true);
+  assert.deepEqual(a.calls, ["activate"]);
+  // (b) 宽限去抖生效：期内 current/持久化不动（无真实等待——注入时钟未推进）
+  assert.equal(h.service.current(), "alpha");
+  assert.equal(lastActiveSkinWrite(h.settings), "alpha");
+
+  await h.clock.advance(50); // 宽限期满未重登记
+  assert.equal(h.service.current(), DEFAULT_SKIN_ID);
+  assert.equal(lastActiveSkinWrite(h.settings), DEFAULT_SKIN_ID);
+  const faults = lastFaultLogWrite(h.settings);
+  assert.equal(faults.at(-1)?.kind, "active-unregistered");
+  assert.match(faults.at(-1)?.message ?? "", /alpha/);
+  assert.match(faults.at(-1)?.message ?? "", /host-side/);
+  assert.equal(h.service.list().find((info) => info.id === "alpha"), undefined);
+});
+
+test("re-registering an active skin within the grace window re-activates the new registration (HMR)", async () => {
+  const h = createHarness({ unregisterGraceMs: 50 });
+  const old = makeSkin("alpha", {
+    activate(ctx) {
+      ctx.slots.register({ kind: "single", name: "settings.section" }, () => null);
+    },
+  });
+  const off = h.service.registerSkin(old);
+  await h.service.switchTo("alpha");
+  const firstEntry = h.remote.slotEntries[0];
+
+  off(); // 旧 fiber dispose → 账本立即撤销
+  assert.equal(firstEntry?.disposed, true);
+
+  const fresh = makeSkin("alpha", {
+    version: "2.0.0",
+    activate(ctx) {
+      ctx.slots.register({ kind: "single", name: "settings.section" }, () => null);
+    },
+  });
+  h.service.registerSkin(fresh); // 宽限内重登记 → 重新激活新登记对象
+  await h.clock.pump();
+
+  assert.deepEqual(fresh.calls, ["activate"]); // 新代码提供观感
+  assert.deepEqual(old.calls, ["activate"]); // 已死 fiber 的 deactivate 不被调用
+  assert.equal(h.service.current(), "alpha"); // current 不变（加载器唯一事实来源）
+  assert.equal(lastActiveSkinWrite(h.settings), "alpha"); // 持久化始终是 alpha
+  assert.equal(h.remote.slotEntries[1]?.disposed, false); // 新激活的席位存活
+  assert.equal(h.service.list().find((info) => info.id === "alpha")?.status, "active");
+  assert.equal(h.service.list().find((info) => info.id === "alpha")?.version, "2.0.0");
+
+  await h.clock.advance(100); // 宽限去抖已取消：期满不再落 default
+  assert.equal(h.service.current(), "alpha");
+  const faults = lastFaultLogWrite(h.settings);
+  assert.equal(faults.find((entry) => entry.kind === "active-unregistered"), undefined);
+});
+
+test("grace re-activation going through the standard path: new activation failure rolls back to default with fault", async () => {
+  const h = createHarness({ unregisterGraceMs: 50 });
+  const old = makeSkin("alpha");
+  const off = h.service.registerSkin(old);
+  await h.service.switchTo("alpha");
   off();
-  assert.equal(h.service.current(), "alpha"); // 仍是激活事实；list 不再展示
-  const stop = await h.service.switchTo(DEFAULT_SKIN_ID);
-  assert.deepEqual(stop, { ok: true });
-  assert.deepEqual(a.calls, ["activate", "deactivate"]); // 兜底关闭仍可达
+  const fresh = makeSkin("alpha", {
+    activate() {
+      throw new Error("new code is broken");
+    },
+  });
+  h.service.registerSkin(fresh);
+  await h.clock.pump();
+
+  // 重新激活走标准路径：失败 → 回滚 default + fault 标记 + faultLog + 持久化改写
+  assert.equal(h.service.current(), DEFAULT_SKIN_ID);
+  assert.equal(lastActiveSkinWrite(h.settings), DEFAULT_SKIN_ID);
+  assert.equal(h.service.list().find((info) => info.id === "alpha")?.status, "fault");
+  assert.equal(lastFaultLogWrite(h.settings).at(-1)?.kind, "activate-failed");
+  await h.clock.advance(100); // 宽限已消费，无二次处理
+  assert.equal(h.service.current(), DEFAULT_SKIN_ID);
 });
 
 test("service face is frozen and exposes the five reserved methods", () => {

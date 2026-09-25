@@ -20,6 +20,10 @@
  * - generation 令牌：新 switchTo 使在途切换作废——旧激活 signal 被 abort，
  *   旧 run 不再提交；若旧 run 正在激活，由旧 run 自己对新皮肤做 deactivate 兜底。
  * - 激活期副作用经 SkinSlotHandle 记账，deactivate（含兜底）逆序撤除。
+ * - 第六触发（宿主侧停用/卸载 active 皮肤，api-notes §9：disable → fiber dispose → off()）：
+ *   off() 立即撤销加载器账本的全部登记（不依赖已死的 fiber），随后进入短宽限去抖——
+ *   宽限内同 id 重新登记（HMR）→ 丢弃旧 husk、经标准激活路径重新激活新登记对象；
+ *   宽限期满未重登记 → shutdownActive + 落回 default + 持久化改写 default + faultLog。
  * - dispose（加载器停用/宿主退出，触发 3/4）经 ctx.effect 登记：deactivate 当前皮肤，
  *   但**不改写**持久化值——用户选择保留到下次启动恢复（公约 §4.4 恢复义务）。
  */
@@ -79,6 +83,15 @@ interface InFlightSwitch {
   settled: Promise<void>;
 }
 
+/** active 皮肤被反登记后的重登记宽限窗口（宿主侧停用触发的 HMR 去抖）。 */
+interface GraceWindow {
+  id: string;
+  /** off() 时的 active record（账本已撤销、closed/deactivateStarted 已置位）。 */
+  record: ActiveRecord;
+  timer: unknown;
+  settled: boolean;
+}
+
 export interface SkinRuntimeOptions {
   /** 必须基于加载器自身 client ctx 构造的 adapter（task-5 报告 §3.4 的 per-ctx 告戒）。 */
   adapter: DshAdapter;
@@ -93,6 +106,11 @@ export interface SkinRuntimeOptions {
    * graceMs = 等 persisted 皮肤重新登记的宽限（皮肤 bundle 在加载器之后材料化）。
    */
   recovery?: { readyMs?: number; graceMs?: number };
+  /**
+   * active 皮肤被反登记（宿主侧停用/卸载）后的重登记宽限去抖（ms）——
+   * HMR 场景旧 off() 与新 registerSkin 快速接连；默认 300ms，测试可注入 fake 时钟。
+   */
+  unregisterGraceMs?: number;
   /** faultLog 时间戳来源（测试可注入）。 */
   now?: () => number;
 }
@@ -111,6 +129,7 @@ const DEFAULT_DEACTIVATE_MS = 10_000;
 const DEFAULT_ACTIVATE_MS = 10_000;
 const DEFAULT_RECOVERY_READY_MS = 10_000;
 const DEFAULT_RECOVERY_GRACE_MS = 5_000;
+const DEFAULT_UNREGISTER_GRACE_MS = 300;
 
 /** 本加载器支持的公约 major（从 CONVENTION_ID 解析，公约 §8：按 major 匹配）。 */
 const SUPPORTED_MAJOR = Number(/\/v(\d+)$/.exec(CONVENTION_ID)?.[1] ?? Number.NaN);
@@ -145,6 +164,7 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
   const activateMs = options.timeouts?.activateMs ?? DEFAULT_ACTIVATE_MS;
   const recoveryReadyMs = options.recovery?.readyMs ?? DEFAULT_RECOVERY_READY_MS;
   const recoveryGraceMs = options.recovery?.graceMs ?? DEFAULT_RECOVERY_GRACE_MS;
+  const unregisterGraceMs = options.unregisterGraceMs ?? DEFAULT_UNREGISTER_GRACE_MS;
   const timestamp = (): string => faultTimestamp(options.now);
 
   const store = new SettingsStore(adapter, timers, (message, details) =>
@@ -171,6 +191,7 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
   let syncOff: Disposer | null = null;
   let pendingSyncCheck = false;
   let syncCheckScheduled = false;
+  let grace: GraceWindow | null = null;
 
   // ------------------------------------------------------------- 通知 / 故障
   function notify(): void {
@@ -187,6 +208,53 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
   async function appendFault(entry: FaultEntry): Promise<void> {
     faultLogMirror = [...faultLogMirror, entry].slice(-MAX_FAULT_LOG);
     await store.writeFaultLog(faultLogMirror);
+  }
+
+  /**
+   * 立即撤销一个 active record 的全部加载器账本登记（第六触发的第一动作）：
+   * 逆序撤除 SkinSlotHandle 记账的席位——**不调用皮肤的 deactivate**（宿主停用场景
+   * 皮肤 fiber 已死，撤销不得依赖它）；随后 abort 激活 signal（公约 §4.2：激活被中止）。
+   * deactivateStarted 置位使后续任何 shutdownActive 不再跑已死 fiber 的 deactivate。
+   */
+  function revokeActiveLedger(record: ActiveRecord): void {
+    record.closed = true;
+    record.deactivateStarted = true;
+    record.controller.abort(`skin "${record.entry.reg.id}" was unregistered while active (host-side disable/uninstall)`);
+    for (const off of [...record.disposers].reverse()) {
+      try {
+        off();
+      } catch (error) {
+        logger.warn("slot disposer threw during ledger revocation", {
+          skinId: record.entry.reg.id,
+          error: describeError(error),
+        });
+      }
+    }
+    record.disposers.length = 0;
+  }
+
+  /**
+   * 宽限期满未重登记：宿主停用的皮肤单方面退出——落回 default + 持久化改写 default +
+   * faultLog（触发源标注宿主侧停用/unregister）。若期间有其他切换接管（active 已易主），
+   * 其自身落盘已保证一致性，这里不再干预。
+   */
+  async function graceExpiry(): Promise<void> {
+    const window = grace;
+    if (!window || window.settled) {
+      return;
+    }
+    window.settled = true;
+    grace = null;
+    if (disposed || active !== window.record) {
+      return;
+    }
+    switchEpoch++; // 作废可能仍在途的该皮肤激活工作（其 signal 已在撤销时 abort）
+    await shutdownActive();
+    const message = `active skin "${window.id}" was unregistered while active (host-side disable/uninstall); its loader-ledger registrations were revoked immediately and no compatible re-registration arrived within ${unregisterGraceMs}ms — fell back to default`;
+    logger.warn(message);
+    await appendFault({ at: timestamp(), skinId: window.id, kind: "active-unregistered", message });
+    await persist(DEFAULT_SKIN_ID, []);
+    notify();
   }
 
   // ------------------------------------------------------------------ 登记
@@ -226,6 +294,28 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
         recoveryWaits.delete(reg.id);
         wake(true);
       }
+      // 宽限去抖命中：active 皮肤被反登记后同 id 重新登记（HMR）——丢弃旧 husk
+      //（旧激活副作用已在 off() 时随账本撤销，不调用已死 fiber 的 deactivate），
+      // 经标准激活路径重新激活新登记对象（加载器是唯一事实来源，观感由新代码提供）。
+      const window = grace;
+      if (window && window.id === reg.id && !window.settled) {
+        timers.clearTimeout(window.timer);
+        window.settled = true;
+        grace = null;
+        if (active === window.record) {
+          active = null;
+          aborter = null;
+          currentId = DEFAULT_SKIN_ID;
+          logger.info("skin re-registered during the active-unregister grace window; re-activating", {
+            skinId: reg.id,
+          });
+          void switchToInternal(reg.id).then((result) => {
+            if (!result.ok) {
+              logger.warn("grace re-activation failed", { skinId: reg.id, error: result.error });
+            }
+          });
+        }
+      }
     }
     logger.info("skin registered", {
       skinId: reg.id,
@@ -240,6 +330,24 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
         return;
       }
       discovered.delete(reg.id);
+      // active 皮肤被反登记 = 宿主侧停用/卸载（api-notes §9：disable → fiber dispose → off()）：
+      // 立即撤销加载器账本（被禁用皮肤的观感残留清零），再进入短宽限去抖（HMR 保护）。
+      const activeRecord = active;
+      if (activeRecord && activeRecord.entry.reg.id === reg.id) {
+        revokeActiveLedger(activeRecord);
+        grace = {
+          id: reg.id,
+          record: activeRecord,
+          timer: timers.setTimeout(() => {
+            void graceExpiry();
+          }, unregisterGraceMs),
+          settled: false,
+        };
+        logger.info("active skin unregistered; ledger revoked, re-registration grace window started", {
+          skinId: reg.id,
+          graceMs: unregisterGraceMs,
+        });
+      }
       logger.info("skin unregistered", { skinId: reg.id });
       notify();
     };
@@ -729,6 +837,11 @@ export function createSkinRuntime(options: SkinRuntimeOptions): SkinRuntimeContr
         resolve(false);
       }
       recoveryWaits.clear();
+      if (grace) {
+        timers.clearTimeout(grace.timer);
+        grace.settled = true;
+        grace = null;
+      }
       syncOff?.();
       syncOff = null;
       pendingSyncCheck = false;
