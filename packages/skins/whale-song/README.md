@@ -68,6 +68,8 @@ vendored 文件的全部改动（去壳、上述 S3 移位、R13 素材替换、
 client 半顶层 `exports.inject = ["uiSkinLoader"]`；`apply` 只做 registerSkin
 登记 + 反登记包进 `ctx.effect`（R1：登记 ≠ 激活）。本皮肤不提供自定义设置
 （公约 §4.2：不提供也不被区别对待；inkwash 先例同款）。
+S4 验收结论（Task 11 实机）：本皮肤无自定义设置项，S4 不适用——上游 apply 无任何设置类逻辑（--dsw-skin-scrim 是上游皮肤中心的遗留读通道，本皮肤只读且缺省 0，不构成设置面）；控制台卡片无 settingsHint，实机证据见 docs/verification.md「Phase 3 迁移皮肤验收」。
+
 
 ## 构建
 

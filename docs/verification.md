@@ -254,3 +254,89 @@ diff（起点 vs 终点）：空 —— 零新增、零删除、零 mtime/大小
 ## 6. 结论
 
 验证矩阵 V1-V11 在 0.1.7-rc.2 隔离环境作为一次完整战役实跑完成：**三包 tarball 安装链可用**、热切换零残留、持久化与恢复重放正确、跨标签页秒级收敛（暴露并修复一处真实缺陷后）、故障隔离与如实降级符合公约 §4.4、卸载回归与 V1 基线逐字节一致、用户真实 profile 零触碰（2547 条目起止零变化）、截图档案完备、两内置皮肤通过公约 §9 全部六问。`.verify` 结束态：五包已卸载、boot 复验通过、无遗留进程（战役全部 boot 已 `taskkill /F /T`；一台先于本战役存在的旧隔离 boot（端口 18777，9/25 19:03 启动）连同处置一并记录于 task-9 报告）。
+
+---
+
+# Phase 3 迁移皮肤实机验收（Task 11 / Phase3B，2026-09-26）
+
+> 对 Phase3A 迁入的 3 款皮肤（trading 交易终端 / dragon-heir 龙的传人 / whale-song 鲸吟）按 PLAN §3.2 完成 S4（设置自治核对）与 S5（V5 残留断言 + V11 公约自检 + 截图存档）实机验收，并验证五皮肤全景（2 示例 + 3 迁移）在控制台的呈现与互斥切换。全程隔离环境（`.verify/dsh-home-t11`，全新 home；真实 profile `C:/Users/HUAWEI/.dsh` 2547 条目起止零变化，快照 `.verify/audit-t11/real-dsh-snapshot-{start,end}.csv`）。
+> **总判定：S4/S5 全部通过；实跑发现并修复一处迁移皮肤真实缺陷（activate 半途抛错泄漏，见 F11.1）。** 全仓 163 tests / lint / typecheck / build 绿。
+
+## P3.0 环境与安装形态
+
+- 宿主 `@deepseek-ai/dsh@0.1.7-rc.2`（`.verify/probe/` 钉死），DSH_HOME=`.verify/dsh-home-t11`（boot 自动初始化），端口 18601，Playwright 1.55 + msedge headless，Git Bash。
+- 安装链（最接近发布形态）：6 包 `npm pack`（loader + 5 皮肤，`.verify/pkgs-t11/`）→ `npx dsh plugin --profile web add <tgz>` 逐包装入 → boot `boot-t11-fixed.log` 零 error/warn。
+- 基线：空 home boot `boot-t11-v1.log`（1 行，零 error/warn）；结束态卸载后干净 boot 与基线 **token 归一化后逐字节一致**（`boot-t11-clean.log`），HTTP 栅栏行为一致（无 token 401 / 带 token 303）。
+
+## P3.1 五皮肤全景（截图 29）
+
+`29-panorama-five-skins-wall.png`：控制台**5 卡齐全、均 discovered 未激活**、hero=默认观感；对 5 款逐一断言页面零副作用（样式节点/body 标记/chrome DOM/data-URI favicon/scrim 变量全零）；S4 证据：aurora 卡有 settingsHint（设置 → 极光之夜）、3 款迁移皮肤卡片无 settingsHint（无设置不被区别对待，同 inkwash 先例）。浏览器 console error/warning 均为 0。
+
+## P3.2 S4 设置自治核对（逐款）
+
+| 皮肤 | 原皮肤是否有自定义设置逻辑 | 结论 | 实机证据 |
+| --- | --- | --- | --- |
+| trading | 无（vendored 产物零 localStorage/configForms；行情接口 `/settings` 是行情数据端点，非设置面） | **S4 不适用** | 卡片无 settingsHint（断言 `S4: aurora card offers its settings hint; migrated skins offer none`）；各包 README 记「S4 验收结论」 |
+| dragon-heir | 无（主题双画跟随是观感行为，非用户设置） | **S4 不适用** | 同上 |
+| whale-song | 无（`--dsw-skin-scrim` 为上游皮肤中心遗留**只读**通道，缺省 0 优雅降级） | **S4 不适用** | 同上 |
+
+## P3.3 S5 逐款切换链 + V5 残留断言（截图 30-32，36/36 断言）
+
+单页加载内完成 `default → skin → default` ×3（无刷新标记全程存活）；settled 截图 30（trading）/31（dragon-heir）/32（whale-song）。残留断言按 Phase3A 副作用映射表逐类（t11-switch.mjs，36/36）：
+
+- **trading**：激活签名（body 标记 + 3 段 chrome DOM + 标题钉死 + 样式节点）→ 切走后 body 标记/样式节点/chrome/data-URI favicon 全零；**标题恢复**（钉死的「交易终端 · DeepSeek 在线」→ 原值）、favicon 集合与激活前一致、body 内联样式表逐项一致；**34s 定时器静默窗**（>30s 轮询周期 + >8s JSONP 自清理）：chrome 不复活、零行情脚本、零标记——定时器确已清除；DOM 快照（归一化、经 churn 校准）激活前 vs 恢复后逐字节一致。
+- **dragon-heir**：激活签名（标记 + fixed 定位 WebP 背景层 + 龙印 favicon）→ 切走后全零 + favicon 集合还原；**实机验证观察器活性**：激活期间翻转 `data-ds-dark-theme` 背景画实时换图（observer 生效证明）；切走后同翻转零反应（**observer 已断开**）；DOM 快照一致。
+- **whale-song**：激活签名（标记 + body 内联背景 + PNG favicon）→ 切走后全零；**body 内联样式 round-trip 还原**（逐属性与激活前一致）；切走后主题翻转零反应；DOM 快照一致。
+
+（环境噪声记录：trading 激活期间对宿主同源可选服务 `/longbridge/panel/snapshot`（405）与 `/plugins/dsh-ticker/api/settings`（404）的探测失败是上游 best-effort 降级设计（占位渲染），非控制台缺陷；已在证据脚本按 URL 过滤并在此留痕。）
+
+## P3.4 互斥全景混切（截图 33-34，25/25 断言）
+
+`aurora → trading → inkwash → dragon-heir → whale-song → default` 连续热切换（示例皮肤 × 迁移皮肤交叉混切）：每跳**恰一卡 active**（全局互斥）、上一款全归零（标记/样式/chrome/favicon 差集探针）、无刷新、无警告横幅；恢复默认后五款全零 + 主题层完全退场（零 token、无暗色标记、偏好轴恒 system）。
+
+## P3.5 故障抽查（trading，截图 35-36；发现并修复缺陷 F11.1）
+
+激活中期注入抛错（在 vendored apply 的副作用全部挂好之后、disposer 注册之前——上游最坏的失败形态）：加载器行为正确（行内错误原文、fault 徽标、回滚默认），**但修复前迁移皮肤泄漏半套副作用**：
+
+**F11.1（缺陷）**：trading activate 半途抛错后 body 标记、样式节点、3 段 chrome、data-URI favicon、钉死的标题全部残留（34s 窗口内不消失）；dragon-heir / whale-song 结构同构，同暴露。
+
+- **修复**（三包 session.ts 对称小改，`fix(skins)` commit）：激活改为**事务化**——① abort 监听先于 apply 注册；② apply 前快照本皮肤自有命名空间锚点（chrome 节点 / data-URI favicon / body 激活标记 / whale 的 5 项 body 内联背景属性），注册**差集**清扫兜底 disposer（只撤激活期间新增者，宿主与其它皮肤节点永不触碰——R2/R3）；③ trading 另在同步 apply 窗口临时包裹全局 `setInterval` 捕获轮询句柄（finally 恢复原函数），失败路径清掉未及登记 disposer 的裸定时器；④ apply 抛错 → teardown + 标题还原（仅同步失败窗口内）→ 原样上抛。成功路径下差集清扫与上游 disposer 幂等重叠（双保险）。
+- **测试**：三包各增「mid-apply failure rolls the partial activation back — zero residue」+「stays activatable after a failed activation」，先红后绿；全仓 163 tests 绿（157 → 163）。
+- **复验**（修复构建重装后，`35-trading-fault-error-fixed.png`/`36-post-fault-recovery-aurora-fixed.png`）：12/12 断言——行内错误、回滚默认、**零残留**（标记/样式/chrome/favicon/标题全还原）、34s 定时器静默、故障不传染（aurora 随后干净激活并完整退场）。
+
+## P3.6 V11 公约 §9 六问 × 3 款
+
+> 佐证 = 代码位置 + P3.x 实机断言。（六问原文见公约 §9；aurora/inkwash 先例答案在 §3.11。）
+
+**① 未激活时除了登记元数据什么都不做？（R1）— 三款 ✅**：三包 `src/client/index.ts` 的 apply 只 registerSkin + `ctx.effect(unregister)`；一切副作用在 activate（`src/client/session.ts`）。实机：P3.1 全景零副作用断言（安装后未激活零 marker/style/chrome/favicon）。
+
+**② deactivate 后与从未激活时逐像素一致？（§4.3）— 三款 ✅**：会话账本逆序撤销 + 幂等 teardown + abort/fiber 安全网（session.ts）。实机：P3.3 归一化 DOM 快照激活前 vs 恢复后逐字节一致（比「恢复原值」更强）+ favicon 集合/标题/body 内联样式逐项一致。
+
+**③ 没碰加载器保留面、其他皮肤、宿主恢复面？（R2/R3/R4）— 三款 ✅**：自有标记（`src/markers.ts` 的上游自有 body/style/chrome 标记）与 `usl-`/宿主 class 不重叠；差集清扫只按自有锚点（session.ts 补齐 2 注释）。实机：P3.4 混切每跳差集探针 + 终态五款全零。
+
+**④ 没依赖任何 CSS-module hash / 私有 DOM / HMR 内部？（R5）— 三款 ✅**：上游 CSS-module 哈希类名（`Ra1MMG_*`）作为观感内容成对迁移、自洽封闭；DOM 触达仅 body/head 标准面 + `data-ds-dark-theme`（aurora 先例明示容忍的唯一宿主属性）。实机：全部 Playwright 断言经自有标记（`data-dsh-*`/`data-plugin-css`/`data-skin-chrome`）定位。
+
+**⑤ 不自己记住激活状态、不自启？（R6）— 三款 ✅**：激活唯一入口 = 加载器 switchTo；皮肤零持久化逻辑。实机：恢复重放由加载器承担（T2.7 V6 先例），本战役 P3.3 每款激活均由控制台点击发起。
+
+**⑥ 没启停或改写任何其他插件？（R7）— 三款 ✅**：无插件清单/patch 配置写；trading 的行情拉取只读公共行情端点。实机：P3.5 故障注入下其余皮肤与宿主功能不受影响（故障不传染断言）。
+
+## P3.7 结束态
+
+六包卸载（`dsh plugin --profile web list` 空）→ 干净 boot 与 V1 基线 token 归一化 diff 为空、零 error → 全部 boot 进程 `taskkill /F /T`，端口 18601 无监听（仅 TIME_WAIT）→ 真实 `.dsh` 2547 条目起止零变化。战前即存在的无关 node 进程（9router 6100、`D:/dsh-verify` 旧隔离 boot 21512，4:23 启动，早于本战役 8:06）未触碰、在此留痕。
+
+## P3.8 截图档案（`.verify/shots/`，接续编号 29-36）
+
+| 文件 | 内容 |
+| --- | --- |
+| 29-panorama-five-skins-wall.png | 五皮肤全景：5 卡齐全、均未激活（宣发口径素材） |
+| 30-trading-active-settled.png | 交易终端激活 settled（跑马灯 + 标题栏 + 状态栏） |
+| 31-dragon-heir-active-settled.png | 龙的传人激活 settled（龙画背景层） |
+| 32-whale-song-active-settled.png | 鲸吟激活 settled（非具象渐变海景，R13 后形态） |
+| 33-mixed-chain-inkwash-hop.png | 互斥混切第 3 跳（inkwash 接管） |
+| 34-mixed-chain-back-to-default.png | 混切后恢复默认（五款零残留） |
+| 35-trading-fault-error-fixed.png | 修复后故障抽查：行内错误 + fault 徽标 + 零残留 |
+| 36-post-fault-recovery-aurora-fixed.png | 故障后恢复：aurora 干净激活 |
+
+（另有修复前泄漏证据 `35-trading-fault-error-prefix.png` / `36-post-fault-recovery-aurora-prefix.png`，与 F11.1 记录对照留存。）
+
+证据脚本：`.verify/pw/t11-{lib,boot-baseline,serve,wall,switch,mixed,fault}.mjs`；boot 日志 `.verify/boot-t11-{v1,panorama,fault,fixed,fault2,clean}.log`；路径审计 `.verify/audit-t11/`。
