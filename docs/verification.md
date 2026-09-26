@@ -11,7 +11,7 @@
 | 项 | 值 |
 | --- | --- |
 | 宿主 | `@deepseek-ai/dsh@0.1.7-rc.2`（`.verify/probe/` npm 安装树，钉死版本） |
-| DSH_HOME | `D:\丰富履历专用文件夹\皮肤管理插件\loader\.verify\dsh-home-t9`（本战役新建，V1 由 boot 自动初始化；全程唯一 DSH_HOME） |
+| DSH_HOME | `<repo>\.verify\dsh-home-t9`（本战役新建，V1 由 boot 自动初始化；全程唯一 DSH_HOME） |
 | Node / npm / pnpm | v24.11.1 / 11.6.2 / 11.7.0（`dsh plugin` 内部转发 pnpm） |
 | 平台 / shell | Windows 10.0.22000 x64 ｜ Git Bash ｜ 浏览器 Playwright 1.55 + msedge headless |
 | 端口 | 18601（战役全程复用；进程管理一律 `taskkill /F /PID <pid> /T`） |
@@ -73,7 +73,7 @@ cd .verify/probe && DSH_HOME=<loader>/.verify/dsh-home-t9 npx dsh --profile web 
 全新 `dsh-home-t9` 首次 boot：
 
 ```
-dsh web: http://127.0.0.1:18601/?token=sAIVrMSKsXCk5SfDT4hP_nGzvoGGQaf9_GFCU68q7cI
+dsh web: http://127.0.0.1:18601/?token=<boot-token>
 ```
 
 - 日志恰 1 行，`grep -ci error` = 0、`grep -ci warn` = 0。
@@ -150,16 +150,16 @@ packages/skins/inkwash tests  9  pass  9  fail 0
 **卸载回归**：按 probe-hang → probe-fail → inkwash → aurora → loader 顺序 remove 五包 → bundles 复位 base 两项、profile dependencies 清空 → 残留剪除（两个 `link:` 探针的空 symlink 目录手动 `rmdir`；tarball 安装物已被 pnpm 自动剪净；`node_modules` 仅剩空 scope 目录与 pnpm 记账文件，零文件）→ 干净 boot：
 
 ```
-V1 基线:  dsh web: http://127.0.0.1:18601/?token=sAIVrMSKsXCk5SfDT4hP_nGzvoGGQaf9_GFCU68q7cI
-V9 卸载后: dsh web: http://127.0.0.1:18601/?token=N0V_V12_8Hpgk1cvJl911LE8w1mFeg2plizDBkoHzDw
+V1 基线:  dsh web: http://127.0.0.1:18601/?token=<boot-token>
+V9 卸载后: dsh web: http://127.0.0.1:18601/?token=<boot-token>
 ```
 
 token 归一化后 diff 为空；`grep -ci error` = 0；HTTP 行为与 V1 一致（401 fence / 303 / 200）。卸载后 `cordis.patch.yml` 保留 loader 的设置行（activeSkin + faultLog 历史）——宿主对用户设置数据的保留行为，对 boot 零影响（上方 boot 即证）。
 
 **路径审计（用户日常 profile 零触碰）**：
 
-1. **命令清单复核**：本战役全部 dsh 命令（8 次 boot、5 次 add、7 次 remove、0 次其他）均以 `DSH_HOME=D:\丰富履历专用文件夹\皮肤管理插件\loader\.verify\dsh-home-t9` 环境变量前缀执行（shell `export`/行内前缀两种形态，脚本内经 `t9-lib.mjs` 的 `env` 参数注入同一值）；无一次裸 `dsh` 运行。`C:/Users/HUAWEI/.dsh` 从未被任何命令读写。
-2. **mtime 扫描（只读证据）**：战役起点与终点各对 `C:\Users\HUAWEI\.dsh` 做一次全量递归清单（`Get-ChildItem -Recurse -Force`，记录类型/全路径/UTC mtime/大小）：
+1. **命令清单复核**：本战役全部 dsh 命令（8 次 boot、5 次 add、7 次 remove、0 次其他）均以 `DSH_HOME=<repo>\.verify\dsh-home-t9` 环境变量前缀执行（shell `export`/行内前缀两种形态，脚本内经 `t9-lib.mjs` 的 `env` 参数注入同一值）；无一次裸 `dsh` 运行。`%USERPROFILE%\.dsh` 从未被任何命令读写。
+2. **mtime 扫描（只读证据）**：战役起点与终点各对 `%USERPROFILE%\.dsh` 做一次全量递归清单（`Get-ChildItem -Recurse -Force`，记录类型/全路径/UTC mtime/大小）：
 
 ```
 起点：2547 条目（.verify/audit-t9/real-dsh-snapshot-start.txt）
@@ -259,7 +259,7 @@ diff（起点 vs 终点）：空 —— 零新增、零删除、零 mtime/大小
 
 # Phase 3 迁移皮肤实机验收（Task 11 / Phase3B，2026-09-26）
 
-> 对 Phase3A 迁入的 3 款皮肤（trading 交易终端 / dragon-heir 龙的传人 / whale-song 鲸吟）按 PLAN §3.2 完成 S4（设置自治核对）与 S5（V5 残留断言 + V11 公约自检 + 截图存档）实机验收，并验证五皮肤全景（2 示例 + 3 迁移）在控制台的呈现与互斥切换。全程隔离环境（`.verify/dsh-home-t11`，全新 home；真实 profile `C:/Users/HUAWEI/.dsh` 2547 条目起止零变化，快照 `.verify/audit-t11/real-dsh-snapshot-{start,end}.csv`）。
+> 对 Phase3A 迁入的 3 款皮肤（trading 交易终端 / dragon-heir 龙的传人 / whale-song 鲸吟）按 PLAN §3.2 完成 S4（设置自治核对）与 S5（V5 残留断言 + V11 公约自检 + 截图存档）实机验收，并验证五皮肤全景（2 示例 + 3 迁移）在控制台的呈现与互斥切换。全程隔离环境（`.verify/dsh-home-t11`，全新 home；真实 profile `%USERPROFILE%\.dsh` 2547 条目起止零变化，快照 `.verify/audit-t11/real-dsh-snapshot-{start,end}.csv`）。
 > **总判定：S4/S5 全部通过；实跑发现并修复一处迁移皮肤真实缺陷（activate 半途抛错泄漏，见 F11.1）。** 全仓 163 tests / lint / typecheck / build 绿。
 
 ## P3.0 环境与安装形态
