@@ -36,6 +36,10 @@ export const CONSOLE_CSS = String.raw`
   --usl-border: var(--dsw-alias-border-l2, #dfe2e8);
   --usl-accent: var(--dsw-alias-brand-primary, #3f6ae0);
   --usl-accent-soft: rgba(63, 106, 224, 0.12);
+  /* 主按钮前景色 = 运行时按 accent 解析值的 WCAG 亮度推导（accent.ts +
+     components.tsx useAccentFgRef，内联覆盖本变量）；此处两值仅为推导失败
+     时的 fallback（亮案默认 accent #3f6ae0 上白字 4.8:1，与推导结果一致）。
+     皮肤覆盖 brand-primary 为浅色时（如 aurora #6f9bff）自动改用墨色前景。 */
   --usl-accent-fg: #ffffff;
   --usl-ok: #1f8a4c;
   --usl-warn-fg: #8a5b16;
@@ -61,6 +65,8 @@ export const CONSOLE_CSS = String.raw`
   --usl-border: var(--dsw-alias-border-l2, #363b45);
   --usl-accent: var(--dsw-alias-brand-primary, #6d92ec);
   --usl-accent-soft: rgba(109, 146, 236, 0.18);
+  /* 同上：运行时按亮度推导的前景色 fallback（暗案默认 accent #6d92ec 上墨字，
+     与推导结果一致）；推导失败时保留本值。 */
   --usl-accent-fg: #0e1116;
   --usl-ok: #58c586;
   --usl-warn-fg: #e2b96b;

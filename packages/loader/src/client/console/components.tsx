@@ -44,6 +44,7 @@ import {
   statusBadgeKey,
   switchResultMessage,
 } from "./messages.ts";
+import { deriveAccentFg } from "./accent.ts";
 import { generatedPreviewSvg, resolvePreviewSvg } from "./preview.ts";
 
 /** 控制台共享环境（mount 期构造；React 组件经 context 消费）。 */
@@ -353,11 +354,51 @@ function SkinCard({
 // 槽位组件：设置页分区 / 侧栏入口 / shell.overlay 浮层
 // ---------------------------------------------------------------------------
 
+/**
+ * 主按钮前景色推导（对比度修复）：`--usl-accent-fg` 不写死，由 `.usl-console`
+ * 根元素上 accent 的**解析值**（宿主 token `--dsw-alias-brand-primary` 被皮肤
+ * 覆盖后随之变化）按 WCAG 亮度取白/墨中对比度更高者（accent.ts）。
+ * - ref callback 形态：元素挂载即计算（commit 期，先于绘制，恢复重放路径无
+ *   首帧闪白字）；浮层关闭卸载时经 cleanup 断开观察器，重开重新推导；
+ * - 皮肤激活/退场会把覆盖 token 写到 body 内联样式（api-notes §7 presenter
+ *   形态），MutationObserver 观察 body 的 style 属性变化即重算——只读观察、
+ *   随元素卸载断开，不触碰 body 本身（读的是宿主公开 token 面）；
+ * - 推导失败（accent 非颜色值）移除内联覆盖，回落 styles.ts 的方案默认值；
+ *   推导结果与配色方案无关（同一 accent 值在亮暗两案下最优前景唯一），
+ *   亮暗切换若伴随 token 重写也由观察器覆盖。
+ */
+function useAccentFgRef(): (el: HTMLDivElement | null) => void | (() => void) {
+  return useCallback((el: HTMLDivElement | null) => {
+    if (el === null) {
+      return;
+    }
+    const apply = () => {
+      const accent = getComputedStyle(el).getPropertyValue("--usl-accent").trim();
+      const fg = deriveAccentFg(accent);
+      if (fg === null) {
+        el.style.removeProperty("--usl-accent-fg");
+      } else {
+        el.style.setProperty("--usl-accent-fg", fg);
+      }
+    };
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(el.ownerDocument.body, { attributes: true, attributeFilter: ["style"] });
+    return () => observer.disconnect();
+  }, []);
+}
+
 /** settings.section 席位组件。owner props = { close }（本控制台用不到关闭面板语义，忽略）。 */
 export function SettingsSection(): ReactNode {
   const { scheme } = useConsole();
+  const accentFgRef = useAccentFgRef();
   return (
-    <div className="usl-console" data-usl-scheme={scheme} data-usl-section="dsh-ui-skin-loader">
+    <div
+      ref={accentFgRef}
+      className="usl-console"
+      data-usl-scheme={scheme}
+      data-usl-section="dsh-ui-skin-loader"
+    >
       <SkinConsole />
     </div>
   );
@@ -393,6 +434,7 @@ export function FooterAction({ wide }: { wide?: boolean }): ReactNode {
 export function OverlayHost(): ReactNode {
   const { env, scheme, t } = useConsole();
   const open = useSyncExternalStore(env.overlayOpen.subscribe, env.overlayOpen.get);
+  const accentFgRef = useAccentFgRef();
   if (!open) {
     return null;
   }
@@ -407,6 +449,7 @@ export function OverlayHost(): ReactNode {
         aria-hidden="true"
       />
       <div
+        ref={accentFgRef}
         className="usl-overlay-panel usl-console"
         data-usl-scheme={scheme}
         role="dialog"
