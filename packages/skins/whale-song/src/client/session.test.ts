@@ -114,6 +114,12 @@ function createFakeEnv(): FakeEnv {
       if (selector === `style[data-plugin="${UPSTREAM_PACKAGE}"]`) {
         return headChildren.filter((n) => n.dataset.plugin === UPSTREAM_PACKAGE && !n.removed);
       }
+      if (selector === "[data-skin-chrome]") {
+        return [];
+      }
+      if (selector === 'link[rel~="icon"]') {
+        return headChildren.filter((n) => n.rel.split(" ").includes("icon") && !n.removed);
+      }
       return [];
     },
   };
@@ -309,6 +315,64 @@ test("whale-song fiber dispose safety net tears the session down (R8)", (t) => {
 
   env.unloadFiber();
 
+  assert.ok(!("dshWhaleSong" in env.body.dataset));
+  assert.ok(everythingRemoved(env));
+});
+
+// ---------------------------------------------------------------------------
+// 激活失败回滚（§4.4 皮肤侧义务）：上游 apply 的契约是「副作用全挂好 → 最后一步
+// ctx.effect 注册 disposer」。中途抛错时已发生的副作用没有 disposer 覆盖——适配层
+// 的 partial-apply 快照（差集清扫 + body 内联背景还原）必须把半套皮肤撤净。
+// ---------------------------------------------------------------------------
+
+test("whale-song mid-apply failure rolls the partial activation back — zero residue (§4.4)", (t) => {
+  const env = createFakeEnv();
+  t.after(() => env.restore());
+  env.body.style.setProperty("background-image", "host-original");
+
+  const style = new FakeElement();
+  style.dataset.plugin = UPSTREAM_PACKAGE;
+  style.dataset.pluginCss = `${UPSTREAM_PACKAGE}/whale-song.module.css`;
+  const favicon = new FakeElement();
+  favicon.rel = "icon";
+  favicon.type = "image/png";
+  favicon.href = "data:image/png;base64,whale";
+
+  const partialApply = (): never => {
+    env.body.dataset.dshWhaleSong = "";
+    env.headChildren.push(style, favicon);
+    env.body.style.setProperty("background-image", "scrim+treatment");
+    env.body.style.setProperty("background-position", "center");
+    throw new Error("intentional mid-apply failure (task-11 fault drill)");
+  };
+
+  assert.throws(
+    () => activateWhaleSongSession(env.ctx, env.skinCtx, partialApply),
+    /intentional mid-apply failure/,
+  );
+
+  assert.ok(!("dshWhaleSong" in env.body.dataset), "body marker rolled back");
+  assert.ok(style.removed && favicon.removed, "style/favicon rolled back");
+  assert.equal(env.body.style.getPropertyValue("background-image"), "host-original", "inline background restored verbatim");
+  assert.equal(env.body.style.getPropertyValue("background-position"), "", "touched inline position cleared back to prior value");
+});
+
+test("whale-song stays activatable after a failed activation (fault is not poisonous)", (t) => {
+  const env = createFakeEnv();
+  t.after(() => env.restore());
+
+  assert.throws(
+    () =>
+      activateWhaleSongSession(env.ctx, env.skinCtx, () => {
+        throw new Error("boom");
+      }),
+    /boom/,
+  );
+
+  const activation = createWhaleSongActivation(env.ctx);
+  activation.activate(env.skinCtx);
+  assert.equal(env.body.dataset.dshWhaleSong, "");
+  activation.deactivate();
   assert.ok(!("dshWhaleSong" in env.body.dataset));
   assert.ok(everythingRemoved(env));
 });

@@ -36,6 +36,9 @@ class FakeElement {
   setAttribute(name: string, value: string): void {
     (this as unknown as Record<string, string>)[name] = value;
   }
+  getAttribute(name: string): string | null {
+    return (this as unknown as Record<string, string | undefined>)[name] ?? null;
+  }
   remove(): void {
     this.removed = true;
   }
@@ -92,6 +95,12 @@ function createFakeEnv(): FakeEnv {
     querySelectorAll(selector: string): FakeElement[] {
       if (selector === `style[data-plugin="${UPSTREAM_PACKAGE}"]`) {
         return headChildren.filter((n) => n.dataset.plugin === UPSTREAM_PACKAGE && !n.removed);
+      }
+      if (selector === "[data-skin-chrome]") {
+        return bodyChildren.filter((n) => n.dataset.skinChrome !== undefined && !n.removed);
+      }
+      if (selector === 'link[rel~="icon"]') {
+        return headChildren.filter((n) => (n.rel.split(" ").includes("icon")) && !n.removed);
       }
       return [];
     },
@@ -170,7 +179,7 @@ function snapshotOf(env: FakeEnv): string {
   return JSON.stringify({
     bodyChildren: env.bodyChildren.map((n) => [n.className, n.removed]),
     headChildren: env.headChildren.map((n) => [n.dataset.pluginCss, n.removed]),
-    cleared: [...env.intervalsCleared].sort((a, b) => a - b),
+    cleared: [...new Set(env.intervalsCleared)].sort((a, b) => a - b),
   });
 }
 
@@ -239,7 +248,7 @@ test("trading activate mounts the chrome and deactivate unwinds everything (§4.
   assert.ok(!("dshTrading" in env.body.dataset), "body marker retracted");
   assert.ok(everythingRemoved(env), "every mounted node removed");
   assert.deepEqual(
-    [...env.intervalsCleared].sort((a, b) => a - b),
+    [...new Set(env.intervalsCleared)].sort((a, b) => a - b),
     [...env.intervalsSet].sort((a, b) => a - b),
     "all three pollers cleared",
   );
@@ -290,6 +299,77 @@ test("trading fiber dispose safety net tears the session down (R8)", (t) => {
 
   env.unloadFiber();
 
+  assert.ok(!("dshTrading" in env.body.dataset));
+  assert.ok(everythingRemoved(env));
+});
+
+// ---------------------------------------------------------------------------
+// 激活失败回滚（§4.4 皮肤侧义务）：上游 apply 的契约是「副作用全挂好 → 最后一步
+// ctx.effect 注册 disposer」。中途抛错时已发生的副作用没有 disposer 覆盖——适配层
+// 的 partial-apply 快照（差集清扫 + 定时器捕获 + 标题还原）必须把半套皮肤撤净。
+// ---------------------------------------------------------------------------
+
+test("trading mid-apply failure rolls the partial activation back — zero residue (§4.4)", (t) => {
+  const env = createFakeEnv();
+  t.after(() => env.restore());
+
+  // 半途 apply 会挂上的自产节点（局部变量以便回滚断言）
+  const style = new FakeElement();
+  style.dataset.plugin = UPSTREAM_PACKAGE;
+  style.dataset.pluginCss = `${UPSTREAM_PACKAGE}/trading.module.css`;
+  const titlebar = new FakeElement();
+  titlebar.dataset.skinChrome = "titlebar";
+  const favicon = new FakeElement();
+  favicon.rel = "icon";
+  favicon.href = "data:image/svg+xml;utf8,candle";
+
+  // 半途 apply：挂上 body 标记 + style 节点 + chrome 条 + data-URI favicon +
+  // 钉标题 + 起轮询定时器，然后在注册 disposer 之前抛错（上游最坏的失败形态）。
+  const partialApply = (): never => {
+    env.body.dataset.dshTrading = "";
+    env.headChildren.push(style, favicon);
+    env.bodyChildren.push(titlebar);
+    (globalThis as { document: { title: string } }).document.title = "交易终端 · DeepSeek 在线";
+    globalThis.setInterval(() => {}, 30_000);
+    throw new Error("intentional mid-apply failure (task-11 fault drill)");
+  };
+
+  assert.throws(
+    () => activateTradingSession(env.ctx, env.skinCtx, partialApply),
+    /intentional mid-apply failure/,
+  );
+
+  assert.ok(!("dshTrading" in env.body.dataset), "body marker rolled back");
+  assert.ok(style.removed && titlebar.removed && favicon.removed, "style/chrome/favicon rolled back");
+  assert.equal(env.title(), "DeepSeek", "document title restored to pre-activation value");
+  assert.deepEqual(
+    [...new Set(env.intervalsCleared)].sort((a, b) => a - b),
+    [...env.intervalsSet].sort((a, b) => a - b),
+    "poll timers created before the throw are all cleared",
+  );
+});
+
+test("trading stays activatable after a failed activation (fault is not poisonous)", (t) => {
+  const env = createFakeEnv();
+  t.after(() => env.restore());
+
+  const failingCtx: SkinActivationContext = {
+    logger: env.skinCtx.logger,
+    signal: new AbortController().signal,
+  };
+  assert.throws(
+    () =>
+      activateTradingSession(env.ctx, failingCtx, () => {
+        throw new Error("boom");
+      }),
+    /boom/,
+  );
+
+  // 失败后正常激活照常成功、teardown 完整（故障不残留任何状态机层面的问题）。
+  const activation = createTradingActivation(env.ctx);
+  activation.activate(env.skinCtx);
+  assert.equal(env.body.dataset.dshTrading, "");
+  activation.deactivate();
   assert.ok(!("dshTrading" in env.body.dataset));
   assert.ok(everythingRemoved(env));
 });

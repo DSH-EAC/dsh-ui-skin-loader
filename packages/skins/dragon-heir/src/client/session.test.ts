@@ -46,6 +46,9 @@ class FakeElement {
   setAttribute(name: string, value: string): void {
     (this as unknown as Record<string, string>)[name] = value;
   }
+  getAttribute(name: string): string | null {
+    return (this as unknown as Record<string, string | undefined>)[name] ?? null;
+  }
   remove(): void {
     this.removed = true;
   }
@@ -120,6 +123,12 @@ function createFakeEnv(): FakeEnv {
     querySelectorAll(selector: string): FakeElement[] {
       if (selector === `style[data-plugin="${UPSTREAM_PACKAGE}"]`) {
         return headChildren.filter((n) => n.dataset.plugin === UPSTREAM_PACKAGE && !n.removed);
+      }
+      if (selector === "[data-skin-chrome]") {
+        return bodyChildren.filter((n) => n.dataset.skinChrome !== undefined && !n.removed);
+      }
+      if (selector === 'link[rel~="icon"]') {
+        return headChildren.filter((n) => n.rel.split(" ").includes("icon") && !n.removed);
       }
       return [];
     },
@@ -316,6 +325,64 @@ test("dragon-heir fiber dispose safety net tears the session down (R8)", (t) => 
 
   env.unloadFiber();
 
+  assert.ok(!("dshDragonHeir" in env.body.dataset));
+  assert.ok(everythingRemoved(env));
+});
+
+// ---------------------------------------------------------------------------
+// 激活失败回滚（§4.4 皮肤侧义务）：上游 apply 的契约是「副作用全挂好 → 最后一步
+// ctx.effect 注册 disposer」。中途抛错时已发生的副作用没有 disposer 覆盖——适配层
+// 的 partial-apply 快照（差集清扫）必须把半套皮肤撤净。
+// ---------------------------------------------------------------------------
+
+test("dragon-heir mid-apply failure rolls the partial activation back — zero residue (§4.4)", (t) => {
+  const env = createFakeEnv();
+  t.after(() => env.restore());
+
+  const style = new FakeElement();
+  style.dataset.plugin = UPSTREAM_PACKAGE;
+  style.dataset.pluginCss = `${UPSTREAM_PACKAGE}/dragon-heir.module.css`;
+  const backdrop = new FakeElement();
+  backdrop.dataset.skinChrome = "backdrop";
+  const favicon = new FakeElement();
+  favicon.rel = "icon";
+  favicon.type = "image/svg+xml";
+  favicon.href = "data:image/svg+xml;utf8,seal";
+
+  const partialApply = (): never => {
+    env.body.dataset.dshDragonHeir = "";
+    env.headChildren.push(style, favicon);
+    env.bodyChildren.push(backdrop);
+    throw new Error("intentional mid-apply failure (task-11 fault drill)");
+  };
+
+  assert.throws(
+    () => activateDragonHeirSession(env.ctx, env.skinCtx, partialApply),
+    /intentional mid-apply failure/,
+  );
+
+  assert.ok(!("dshDragonHeir" in env.body.dataset), "body marker rolled back");
+  assert.ok(style.removed && backdrop.removed && favicon.removed, "style/chrome/favicon rolled back");
+  assert.ok(everythingRemoved(env), "nothing left mounted");
+});
+
+test("dragon-heir stays activatable after a failed activation (fault is not poisonous)", (t) => {
+  const env = createFakeEnv();
+  t.after(() => env.restore());
+
+  assert.throws(
+    () =>
+      activateDragonHeirSession(env.ctx, env.skinCtx, () => {
+        throw new Error("boom");
+      }),
+    /boom/,
+  );
+
+  const activation = createDragonHeirActivation(env.ctx);
+  activation.activate(env.skinCtx);
+  assert.equal(env.body.dataset.dshDragonHeir, "");
+  assert.equal(env.bodyChildren.length, 1, "backdrop mounted on the clean retry");
+  activation.deactivate();
   assert.ok(!("dshDragonHeir" in env.body.dataset));
   assert.ok(everythingRemoved(env));
 });
